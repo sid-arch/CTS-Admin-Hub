@@ -15,7 +15,7 @@ const save = () => {
 // --- 2. AUTHENTICATION ---
 window.checkAuth = () => {
     const passInput = document.getElementById('admin-pass');
-    if (passInput.value === "CTS-King") {
+    if (passInput.value === "Nalanda") {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('dashboard').classList.remove('hidden');
         // Initial build of all UI elements
