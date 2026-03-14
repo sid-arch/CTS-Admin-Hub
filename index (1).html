@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTS Elite | Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-[#020617] text-slate-300 min-h-screen">
+
+    <div id="login-page" class="fixed inset-0 bg-[#000000] flex items-center justify-center z-[100] p-4">
+        <div class="glass-panel p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/10 text-center">
+            <div class="w-20 h-20 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-8 rotate-3 shadow-xl">
+                <span class="text-3xl font-black text-white tracking-tighter -rotate-3">CTS</span>
+            </div>
+            <h1 class="text-3xl font-extrabold text-white mb-2 tracking-tight">Elite Portal</h1>
+            <p class="text-slate-500 mb-8 text-[10px] uppercase tracking-[0.4em] font-bold">Secure Access</p>
+            <input type="password" id="admin-pass" placeholder="••••••••" 
+                class="w-full bg-black/40 border border-white/10 p-4 rounded-2xl mb-6 focus:ring-2 focus:ring-blue-500 outline-none text-center text-white text-xl tracking-widest transition-all">
+            <button onclick="checkAuth()" class="bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl w-full font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-95">LOG IN</button>
+        </div>
+    </div>
+
+    <div id="dashboard" class="hidden flex min-h-screen">
+        
+        <aside class="w-72 bg-[#020617] border-r border-white/5 flex flex-col sticky top-0 h-screen no-print">
+            <div class="p-8"><h2 class="text-white font-extrabold tracking-tighter text-2xl italic">CTS<span class="text-blue-500">.</span></h2></div>
+            <nav class="flex-1 px-4 space-y-1">
+                <button onclick="switchTab('attendance', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/5"><span>📅</span> Attendance</button>
+                <button onclick="switchTab('homework', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/5"><span>📚</span> Homework</button>
+                <button onclick="switchTab('exams', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/5"><span>📝</span> Exam Scores</button>
+                <button onclick="switchTab('students', this)" class="nav-link active-link w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/5"><span>👥</span> Students</button>
+                <button onclick="switchTab('reports', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4 transition-all hover:bg-white/5"><span>📜</span> Reports & IDs</button>
+            </nav>
+            <div class="p-6 space-y-2 border-t border-white/5">
+                <button onclick="exportToCSV()" class="w-full bg-emerald-600/10 text-emerald-500 p-3 rounded-xl text-[10px] font-black border border-emerald-600/20 hover:bg-emerald-600 hover:text-white transition-all">EXPORT DATA</button>
+                <button onclick="switchTab('settings', this)" class="w-full text-left p-4 text-slate-500 hover:text-white flex items-center gap-4 transition-all text-sm font-bold"><span>⚙️</span> Settings</button>
+                <button onclick="logout()" class="w-full text-left p-4 text-red-400 hover:bg-red-500/10 rounded-2xl flex items-center gap-4 transition-all text-sm font-bold"><span>🔒</span> Logout</button>
+            </div>
+        </aside>
+
+        <main class="flex-1 p-10 bg-gradient-to-br from-[#020617] to-[#0f172a] overflow-y-auto">
+            
+            <section id="tab-attendance" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 glass-panel p-8 rounded-3xl border border-white/5">
+                        <div id="reader" class="rounded-2xl overflow-hidden border border-white/10 bg-black"></div>
+                        <input type="text" id="manual-att-search" placeholder="Click here & scan with external scanner..." onkeydown="handleScannerKey(event)"
+                            class="w-full mt-6 bg-black/40 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-blue-500 shadow-2xl transition-all">
+                    </div>
+                    <div class="glass-panel p-6 rounded-3xl border border-white/5">
+                        <h4 class="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 text-center underline decoration-blue-500">Live Activity Log</h4>
+                        <div id="session-log" class="space-y-4"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="tab-homework" class="tab-content">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-black text-white">Homework Tracker</h2>
+                    <select id="filter-hw" onchange="renderHomework()" class="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-black text-blue-400 outline-none"></select>
+                </div>
+                <div id="hw-grade-container" class="space-y-8"></div>
+            </section>
+
+            <section id="tab-exams" class="tab-content">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-black text-white">Exam Records</h2>
+                    <select id="filter-exams" onchange="renderExams()" class="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-black text-blue-400 outline-none"></select>
+                </div>
+                <div id="exam-grade-container" class="space-y-8"></div>
+            </section>
+
+            <section id="tab-students" class="tab-content active-tab">
+                <div class="flex justify-between items-center mb-8">
+                    <h2 class="text-3xl font-black text-white">Student Roster</h2>
+                    <select id="filter-students" onchange="renderStudentTable()" class="bg-white/5 border border-white/10 p-3 rounded-xl text-xs font-black text-blue-400 outline-none"></select>
+                </div>
+                <div class="glass-panel p-8 rounded-3xl border border-white/5 mb-8">
+                    <form id="student-form" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <input type="text" id="reg-id" placeholder="ID Number" class="bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none" required>
+                        <input type="text" id="reg-name" placeholder="Full Name" class="bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none" required>
+                        <select id="reg-grade" class="bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none"></select>
+                        <button type="submit" class="bg-blue-600 text-white font-bold rounded-2xl hover:bg-blue-500 transition-all">Enroll Student</button>
+                    </form>
+                </div>
+                <div class="glass-panel rounded-3xl border border-white/5 overflow-x-auto shadow-2xl">
+                    <table class="w-full text-left min-w-[900px]">
+                        <thead class="bg-white/5 text-[11px] uppercase tracking-widest font-black text-slate-500">
+                            <tr>
+                                <th class="p-6">Student</th>
+                                <th class="p-6">Grade</th>
+                                <th class="p-6 text-center">Attendance %</th>
+                                <th class="p-6 text-center">Homework %</th>
+                                <th class="p-6 text-center">Exam %</th>
+                                <th class="p-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="student-list-body" class="divide-y divide-white/5"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="tab-reports" class="tab-content">
+                <div id="grade-categorized-reports" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"></div>
+            </section>
+
+            <section id="tab-settings" class="tab-content">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <div class="glass-panel p-8 rounded-3xl border border-white/5">
+                        <h3 class="text-white font-bold mb-4 uppercase text-xs tracking-widest">Total School Days</h3>
+                        <p class="text-slate-500 text-[10px] mb-4">Set the total number of classes held to calculate attendance %.</p>
+                        <input type="number" id="global-classes-input" onchange="updateGlobalClasses(this.value)" 
+                            class="w-full bg-black/40 border border-white/10 p-6 rounded-3xl text-5xl font-black text-blue-500 outline-none focus:border-blue-500 transition-all">
+                    </div>
+
+                    <div class="glass-panel p-8 rounded-3xl border border-white/5">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-white font-bold uppercase text-xs">Grade Setup</h3>
+                            <button onclick="addNewGrade()" class="text-blue-500 font-bold text-xs hover:underline">+ ADD NEW GRADE</button>
+                        </div>
+                        <div id="grade-config-list" class="space-y-4">
+                            </div>
+                    </div>
+
+                    <div class="lg:col-span-2 mt-10">
+                        <div class="glass-panel p-8 rounded-3xl border border-red-500/20 bg-red-500/5">
+                            <h3 class="text-red-500 font-black mb-2 uppercase text-xs tracking-widest">System Maintenance</h3>
+                            <p class="text-slate-500 text-xs mb-6">Wipe all students, grades, and attendance data. This action is permanent.</p>
+                            <button onclick="fullSystemClear()" class="w-full bg-red-600/10 text-red-500 p-4 rounded-2xl text-xs font-black border border-red-600/30 hover:bg-red-600 hover:text-white transition-all uppercase">
+                                Full System Purge (Factory Reset)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            </section>
+        </main>
+    </div>
+
+    <div id="print-area"></div>
+    <script src="app.js"></script>
+</body>
+</html>
