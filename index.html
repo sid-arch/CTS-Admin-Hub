@@ -38,12 +38,12 @@
             <section id="tab-roster" class="tab-content active-tab">
                 <div class="flex justify-between items-end mb-12">
                     <div>
-                        <h1 class="text-5xl font-black text-white italic tracking-tighter mb-2">ROSTER</h1>
-                        <p class="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Total Students: <span id="stat-total-students" class="text-blue-400">0</span></p>
+                        <h1 class="text-5xl font-black text-white italic tracking-tighter mb-2 uppercase">Roster</h1>
+                        <p class="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Live Syncing: <span id="stat-total-students" class="text-blue-400">0</span> Students</p>
                     </div>
                     <button onclick="openStudentModal()" class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase shadow-lg shadow-blue-600/20 hover:scale-105 transition-all">Add Student</button>
                 </div>
-                <div class="mb-8"><input type="text" id="roster-search" oninput="renderStudentTable()" placeholder="Search names..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500"></div>
+                <div class="mb-8"><input type="text" id="roster-search" oninput="renderStudentTable()" placeholder="Search names or IDs..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500"></div>
                 <div class="glass-panel rounded-[2rem] overflow-hidden border border-white/5">
                     <table class="w-full text-left">
                         <thead>
@@ -60,8 +60,8 @@
                 <h1 class="text-4xl font-black text-white italic mb-8 uppercase tracking-tighter">Attendance Scans</h1>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div class="lg:col-span-2">
-                        <input type="text" id="attendance-scan-input" placeholder="Ready for scan..." class="w-full bg-black/40 border-2 border-emerald-500/20 p-8 rounded-[2rem] text-3xl text-white outline-none focus:border-emerald-500 font-mono text-center shadow-inner">
-                        <p class="text-center text-slate-500 mt-4 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Waiting for Scanner input</p>
+                        <input type="text" id="attendance-scan-input" placeholder="Scan Barcode Here..." class="w-full bg-black/40 border-2 border-emerald-500/20 p-8 rounded-[2rem] text-3xl text-white outline-none focus:border-emerald-500 font-mono text-center shadow-inner">
+                        <p class="text-center text-slate-500 mt-4 text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">System Online - Awaiting Input</p>
                     </div>
                     <div class="glass-panel p-6 rounded-[2.5rem] border border-white/5 h-[500px] flex flex-col">
                         <h3 class="text-white font-bold uppercase text-[10px] tracking-widest mb-4 text-slate-500">Scan Log</h3>
@@ -82,7 +82,7 @@
                         Import CSV <input type="file" class="hidden" onchange="handleCSVImport(event)" accept=".csv">
                     </label>
                 </div>
-                <div class="mb-8"><input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search Parents / Phones..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500"></div>
+                <div class="mb-8"><input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search Parent Emails or Phone..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500"></div>
                 <div class="glass-panel rounded-[2rem] overflow-hidden border border-white/5 shadow-2xl">
                     <table class="w-full text-left">
                         <thead>
@@ -98,37 +98,30 @@
             <section id="tab-settings" class="tab-content">
                 <div class="max-w-4xl mx-auto space-y-8">
                     <div class="glass-panel p-10 rounded-[2.5rem] border border-white/5 text-center shadow-2xl">
-                        <h3 class="text-slate-500 font-bold mb-4 uppercase text-[10px] tracking-widest">Total Sessions Held</h3>
+                        <h3 class="text-slate-500 font-bold mb-4 uppercase text-[10px] tracking-widest">Total Classes Logged</h3>
                         <input type="number" id="global-classes-input" onchange="updateGlobalClasses(this.value)" class="w-40 bg-black/40 border border-white/10 p-6 rounded-[2rem] text-6xl font-black text-blue-500 outline-none text-center">
                     </div>
-                    <div class="glass-panel p-10 rounded-[2.5rem] border border-white/5">
-                        <div class="flex justify-between items-center mb-6">
-                            <h3 class="text-white font-black uppercase text-sm">Grade Levels</h3>
-                            <button onclick="addNewGrade()" class="text-blue-500 font-black text-[10px] tracking-widest hover:underline">+ ADD LEVEL</button>
-                        </div>
-                        <div id="grade-config-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    </div>
+                    <div id="grade-config-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    <button onclick="addNewGrade()" class="w-full bg-white/5 p-4 rounded-2xl border border-dashed border-white/10 font-bold text-xs uppercase tracking-widest hover:bg-white/10 transition-all">+ Add New Grade Level</button>
                 </div>
             </section>
         </main>
     </div>
 
-    <div id="student-modal" class="fixed inset-0 bg-[#020617]/90 backdrop-blur-md hidden items-center justify-center z-[110] p-4">
+    <div id="student-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md hidden items-center justify-center z-[110] p-4">
         <div class="glass-panel p-10 rounded-[2.5rem] border border-white/10 w-full max-w-lg shadow-2xl">
             <h2 class="text-2xl font-black text-white mb-8 italic uppercase tracking-tighter">Student Profile</h2>
             <div class="grid grid-cols-1 gap-4">
-                <input type="text" id="m-id" placeholder="ID (Barcode)" class="modal-input w-full">
-                <input type="text" id="m-name" placeholder="Full Name" class="modal-input w-full">
-                <input type="text" id="m-grade" placeholder="Grade Code (e.g. g1)" class="modal-input w-full">
-                <input type="text" id="m-phone" placeholder="Phone Number" class="modal-input w-full">
-                <div class="grid grid-cols-2 gap-4">
-                    <input type="email" id="m-f-email" placeholder="Father Email" class="modal-input w-full">
-                    <input type="email" id="m-m-email" placeholder="Mother Email" class="modal-input w-full">
-                </div>
+                <input type="text" id="m-id" placeholder="Barcode ID" class="modal-input">
+                <input type="text" id="m-name" placeholder="Student Name" class="modal-input">
+                <input type="text" id="m-grade" placeholder="Grade ID (e.g. g1)" class="modal-input">
+                <input type="text" id="m-phone" placeholder="Phone" class="modal-input">
+                <input type="email" id="m-f-email" placeholder="Father Email" class="modal-input">
+                <input type="email" id="m-m-email" placeholder="Mother Email" class="modal-input">
             </div>
             <div class="flex gap-4 mt-10">
                 <button onclick="closeStudentModal()" class="flex-1 bg-white/5 text-slate-400 py-4 rounded-2xl font-bold uppercase text-xs">Cancel</button>
-                <button onclick="saveStudent()" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-500 transition-all uppercase text-xs">Save Profile</button>
+                <button onclick="saveStudent()" class="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-500 transition-all uppercase text-xs">Save</button>
             </div>
         </div>
     </div>
