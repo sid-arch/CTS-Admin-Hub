@@ -1,23 +1,126 @@
-/* Remove all scrollbars while keeping functionality */
+/* --- 1. GLOBAL RESET & SCROLLBAR HIDING --- */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    letter-spacing: -0.01em;
+    font-family: 'Outfit', sans-serif;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+}
+
+/* Hide scrollbars for Chrome, Safari and Opera */
 ::-webkit-scrollbar {
     display: none;
 }
 
-body {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+/* --- 2. GLASS UI & PANELS --- */
+.glass-panel {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-/* Ensure homework selects wrap instead of scrolling horizontally */
-.hw-container-fix {
+/* --- 3. NAVIGATION --- */
+.nav-link {
+    color: #64748b;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-left: 4px solid transparent;
+}
+
+.active-link {
+    background: rgba(59, 130, 246, 0.08);
+    color: #3b82f6;
+    border-left-color: #3b82f6;
+}
+
+/* --- 4. TAB ANIMATIONS --- */
+.tab-content {
+    display: none;
+}
+
+.active-tab {
+    display: block;
+    animation: slideUp 0.4s ease-out;
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0; 
+        transform: translateY(12px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+/* --- 5. HOMEWORK & FLEX WRAPPING (FIXES SCROLLERS) --- */
+/* This ensures the dropdowns wrap to the next line instead of scrolling */
+.hw-container-wrap {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    padding: 4px;
 }
 
-/* Smooth layout */
-.glass-panel {
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.4rem center;
+    background-size: 0.8em;
+    padding-right: 1.4rem !important;
+    transition: border 0.2s;
+}
+
+select:focus {
+    border-color: #3b82f6 !important;
+}
+
+/* --- 6. MODAL & INPUTS --- */
+.modal-input {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    border-radius: 1rem;
+    color: white;
+    outline: none;
+    width: 100%;
+    transition: all 0.2s;
+}
+
+.modal-input:focus {
+    border-color: #3b82f6;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+/* --- 7. DATABASE TABLE ENHANCEMENTS --- */
+/* Ensure the Database text is clear and readable */
+#database-list-body td {
+    vertical-align: middle;
+}
+
+.db-text-lg {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+/* --- 8. UTILITIES --- */
+.levitate {
+    transition: transform 0.3s ease;
+}
+
+.levitate:hover {
+    transform: translateY(-4px);
+}
+
+/* Attendance Scan Glow */
+#attendance-scan-input:focus {
+    box-shadow: 0 0 25px rgba(16, 185, 129, 0.1);
 }
