@@ -77,6 +77,7 @@
                     <input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search Database..." class="w-full md:w-96 bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none">
                     <div class="flex gap-4">
                         <input type="file" id="csv-import" accept=".csv" class="hidden" onchange="handleCSVImport(event)">
+                        <button onclick="openStudentModal()" class="levitate bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase">Add Student</button>
                         <button onclick="document.getElementById('csv-import').click()" class="levitate bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase">Import CSV</button>
                     </div>
                 </div>
