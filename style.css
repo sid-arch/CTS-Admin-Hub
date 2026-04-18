@@ -1,21 +1,18 @@
-/* --- GLOBAL CLEANUP --- */
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { letter-spacing: -0.01em; cursor: default; overflow-x: hidden; }
-
-/* Hide Scrollbars Everywhere */
+body { letter-spacing: -0.01em; cursor: default; overflow-x: hidden; font-family: 'Outfit', sans-serif; }
 ::-webkit-scrollbar { display: none; }
 body { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* --- GLASS UI --- */
 .glass-panel { 
     background: rgba(15, 23, 42, 0.4); 
-    backdrop-filter: blur(30px); 
-    -webkit-backdrop-filter: blur(30px); 
+    backdrop-filter: blur(40px); 
+    -webkit-backdrop-filter: blur(40px); 
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .nav-link { 
     color: #64748b; 
-    transition: 0.3s; 
+    transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
     border-left: 4px solid transparent; 
 }
 
@@ -25,33 +22,30 @@ body { -ms-overflow-style: none; scrollbar-width: none; }
     border-left-color: #3b82f6; 
 }
 
-/* --- TAB ENGINE --- */
 .tab-content { display: none; }
 .active-tab { 
     display: block; 
-    animation: fadeIn 0.5s cubic-bezier(0.23, 1, 0.32, 1); 
+    animation: fadeIn 0.6s cubic-bezier(0.23, 1, 0.32, 1); 
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(20px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- FORM & INPUTS --- */
 .modal-input {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 1.25rem;
-    border-radius: 1.25rem;
+    padding: 1.5rem;
+    border-radius: 1.5rem;
     color: white;
     outline: none;
     width: 100%;
     transition: 0.2s;
 }
 
-.modal-input:focus { border-color: #3b82f6; }
+.modal-input:focus { border-color: #3b82f6; background: rgba(0,0,0,0.6); }
 
-/* Homework Select Fix */
 select {
     cursor: pointer;
     appearance: none;
@@ -59,10 +53,9 @@ select {
     background-repeat: no-repeat;
     background-position: right 0.6rem center;
     background-size: 0.8em;
-    padding-right: 1.8rem !important;
+    padding-right: 2rem !important;
 }
 
-/* Attendance Glow */
 #attendance-scan-input:focus {
-    background: rgba(16, 185, 129, 0.05);
+    background: rgba(16, 185, 129, 0.03);
 }
