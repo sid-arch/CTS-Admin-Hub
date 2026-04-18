@@ -9,7 +9,10 @@ const firebaseConfig = {
   measurementId: "G-N332B7X0W7"
 };
 
-firebase.initializeApp(firebaseConfig);
+// Initialize Firebase only once
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 
 let students = [];
@@ -17,9 +20,9 @@ let totalClassesHeld = 1;
 let gradeConfig = {};
 let isEditing = false;
 
-// --- 2. PERSISTENT AUTH ---
+// --- 2. AUTH & PERSISTENCE ---
 const checkSession = () => {
-    if (localStorage.getItem('cts_auth') === 'true') {
+    if (localStorage.getItem('cts_logged_in') === 'true') {
         document.getElementById('login-page').classList.add('hidden');
         document.getElementById('dashboard').classList.remove('hidden');
         startRealtimeSync();
@@ -29,50 +32,45 @@ const checkSession = () => {
 window.checkAuth = () => {
     const pass = document.getElementById('admin-pass').value;
     if (pass === "Nalanda") {
-        localStorage.setItem('cts_auth', 'true');
+        localStorage.setItem('cts_logged_in', 'true');
         document.getElementById('login-page').classList.add('hidden');
         document.getElementById('dashboard').classList.remove('hidden');
         startRealtimeSync();
-    } else { alert("Invalid Password"); }
+    } else { alert("Wrong Password!"); }
 };
 
 window.logout = () => {
-    localStorage.removeItem('cts_auth');
+    localStorage.removeItem('cts_logged_in');
     location.reload();
 };
 
-// --- 3. REALTIME DATA SYNC ---
+// --- 3. REALTIME SYNC ENGINE ---
 const startRealtimeSync = () => {
-    // Sync Students
+    // Listen for Students
     db.collection('students').onSnapshot(snap => {
-        students = snap.docs.map(doc => doc.data());
-        refreshAllDataViews();
+        students = snap.docs.map(doc => ({...doc.data(), docId: doc.id}));
+        renderAll();
     });
 
-    // Sync Grade Configs
+    // Listen for Grade Settings
     db.collection('grades').onSnapshot(snap => {
         gradeConfig = {};
         snap.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
-        refreshAllDataViews();
+        renderAll();
     });
 
-    // Sync Global Settings
+    // Listen for Global Classes (Persistent)
     db.collection('settings').doc('global').onSnapshot(doc => {
         if (doc.exists()) {
             totalClassesHeld = doc.data().totalClassesHeld || 1;
             const input = document.getElementById('global-classes-input');
             if(input) input.value = totalClassesHeld;
-            refreshAllDataViews();
+            renderAll();
         }
     });
 };
 
-const syncStudent = (s) => db.collection('students').doc(s.id).set(s);
-const syncGrade = (id, data) => db.collection('grades').doc(id).set(data);
-const syncGlobal = (val) => db.collection('settings').doc('global').set({ totalClassesHeld: val });
-
-// --- 4. RENDERERS ---
-const refreshAllDataViews = () => {
+const renderAll = () => {
     renderStudentTable();
     renderDatabaseTable();
     renderGradeSettings();
@@ -81,6 +79,7 @@ const refreshAllDataViews = () => {
         document.getElementById('stat-total-students').innerText = students.length;
 };
 
+// --- 4. DATA RENDERING ---
 window.renderStudentTable = () => {
     const tbody = document.getElementById('student-list-body');
     const search = document.getElementById('roster-search')?.value.toLowerCase() || "";
@@ -90,19 +89,18 @@ window.renderStudentTable = () => {
         const g = gradeConfig[s.grade] || { name: s.grade, completed: 0 };
         const attPct = totalClassesHeld > 0 ? Math.min(Math.round((s.attendance / totalClassesHeld) * 100), 100) : 0;
         
-        // Calculate average from numeric values stored in student record
         const comp = parseInt(g.completed) || 0;
         const hwValues = s.homework ? s.homework.slice(0, comp) : [];
         const hwSum = hwValues.reduce((a, b) => a + (parseInt(b) || 0), 0);
         const hwAvg = comp > 0 ? Math.round(hwSum / comp) : 0;
 
         return `
-        <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-all">
+        <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-all group">
             <td class="p-6">
-                <div class="font-bold text-white">${s.name}</div>
-                <div class="text-[10px] text-slate-500 font-mono">${s.id}</div>
+                <div class="font-bold text-white group-hover:text-blue-400 transition-colors">${s.name}</div>
+                <div class="text-[9px] text-slate-500 font-mono uppercase tracking-tighter">${s.id}</div>
             </td>
-            <td class="p-6 text-[10px] uppercase text-blue-400 font-black">${g.name}</td>
+            <td class="p-6 text-[10px] uppercase text-blue-400 font-black tracking-widest">${g.name}</td>
             <td class="p-6 text-center font-bold text-white">${attPct}%</td>
             <td class="p-6 text-center font-bold text-emerald-500">${hwAvg}%</td>
             <td class="p-6 text-right space-x-2">
@@ -116,34 +114,33 @@ window.renderStudentTable = () => {
 window.renderHomework = () => {
     const container = document.getElementById('hw-grade-container');
     if (!container) return;
-    const activeGrades = [...new Set(students.map(s => s.grade))];
+    const gradesWithStudents = [...new Set(students.map(s => s.grade))];
 
-    container.innerHTML = activeGrades.map(gId => {
-        const list = students.filter(s => s.grade === gId);
+    container.innerHTML = gradesWithStudents.map(gId => {
+        const sList = students.filter(s => s.grade === gId);
         const g = gradeConfig[gId] || { name: gId, lessons: 10 };
-        const rows = list.map(s => `
-            <div class="p-4 flex justify-between items-center border-b border-white/5">
-                <span class="text-xs font-bold text-white">${s.name}</span>
-                <div class="flex gap-2 overflow-x-auto">
-                    ${Array.from({length: g.lessons || 10}).map((_, i) => `
-                        <select onchange="updateHW('${s.id}', ${i}, this.value)" 
-                                class="bg-black/40 border border-white/10 rounded text-[9px] p-2 text-blue-400 outline-none focus:border-blue-500">
-                            <option value="0" ${s.homework?.[i] == 0 ? 'selected' : ''}>Not Done</option>
-                            <option value="25" ${s.homework?.[i] == 25 ? 'selected' : ''}>25% Done</option>
-                            <option value="50" ${s.homework?.[i] == 50 ? 'selected' : ''}>50% Done</option>
-                            <option value="75" ${s.homework?.[i] == 75 ? 'selected' : ''}>75% Done</option>
-                            <option value="100" ${s.homework?.[i] == 100 ? 'selected' : ''}>100% Done</option>
-                        </select>
-                    `).join('')}
-                </div>
-            </div>`).join('');
         return `
             <div class="glass-panel rounded-3xl overflow-hidden border border-white/5 mb-6">
-                <div class="p-4 bg-white/5 font-black uppercase text-[10px] tracking-widest text-blue-400 flex justify-between">
+                <div class="p-4 bg-white/5 font-black uppercase text-[10px] text-blue-400 flex justify-between">
                     <span>${g.name}</span>
                     <span class="text-slate-500">${g.lessons} Lessons</span>
                 </div>
-                ${rows}
+                ${sList.map(s => `
+                    <div class="p-4 flex justify-between items-center border-b border-white/5">
+                        <span class="text-xs font-bold text-white">${s.name}</span>
+                        <div class="flex gap-2 overflow-x-auto p-1">
+                            ${Array.from({length: g.lessons || 10}).map((_, i) => `
+                                <select onchange="updateHW('${s.id}', ${i}, this.value)" 
+                                        class="bg-black/40 border border-white/10 rounded text-[9px] p-2 text-blue-400 outline-none">
+                                    <option value="0" ${s.homework?.[i] == 0 ? 'selected' : ''}>Not Done</option>
+                                    <option value="25" ${s.homework?.[i] == 25 ? 'selected' : ''}>25% Done</option>
+                                    <option value="50" ${s.homework?.[i] == 50 ? 'selected' : ''}>50% Done</option>
+                                    <option value="75" ${s.homework?.[i] == 75 ? 'selected' : ''}>75% Done</option>
+                                    <option value="100" ${s.homework?.[i] == 100 ? 'selected' : ''}>100% Done</option>
+                                </select>
+                            `).join('')}
+                        </div>
+                    </div>`).join('')}
             </div>`;
     }).join('');
 };
@@ -153,9 +150,9 @@ window.renderDatabaseTable = () => {
     const search = document.getElementById('db-search')?.value.toLowerCase() || "";
     if (!tbody) return;
 
-    tbody.innerHTML = students.filter(s => s.name.toLowerCase().includes(search) || s.phone.includes(search)).map(s => `
+    tbody.innerHTML = students.filter(s => s.name.toLowerCase().includes(search) || s.phone.includes(search) || s.fatherEmail.toLowerCase().includes(search)).map(s => `
         <tr class="border-b border-white/5 hover:bg-white/[0.01]">
-            <td class="p-6 font-bold text-white text-base">${s.name}<br><span class="text-[9px] text-slate-500 font-mono">${s.id}</span></td>
+            <td class="p-6 font-bold text-white text-base">${s.name}<br><span class="text-[9px] text-slate-500 font-mono tracking-tighter">${s.id}</span></td>
             <td class="p-6 text-blue-400 font-black uppercase text-xs">${(gradeConfig[s.grade]?.name || s.grade)}</td>
             <td class="p-6 text-slate-300 font-mono text-sm">${s.phone}</td>
             <td class="p-6 text-slate-500 italic text-xs">
@@ -169,7 +166,7 @@ window.renderGradeSettings = () => {
     const list = document.getElementById('grade-config-list');
     if (!list) return;
     list.innerHTML = Object.keys(gradeConfig).map(id => `
-        <div class="p-6 bg-black/40 rounded-[2rem] border border-white/5 space-y-4">
+        <div class="p-6 bg-black/40 rounded-[2rem] border border-white/5 space-y-4 shadow-xl">
             <div class="flex justify-between items-center"><span class="font-black text-blue-500 font-mono text-[10px] uppercase">${id}</span><button onclick="removeGrade('${id}')" class="text-rose-500 text-[10px] font-black hover:underline">DELETE</button></div>
             <input type="text" value="${gradeConfig[id].name}" onchange="updateGradeProp('${id}','name',this.value)" class="w-full bg-white/5 p-3 rounded-xl text-white text-sm outline-none border border-white/5 focus:border-blue-500">
             <div class="grid grid-cols-2 gap-4">
@@ -179,10 +176,49 @@ window.renderGradeSettings = () => {
         </div>`).join('');
 };
 
-// --- 5. MODAL & STUDENT ACTIONS ---
+// --- 5. CORE ACTIONS (CLOUD SYNC) ---
+window.updateHW = async (id, index, value) => {
+    const s = students.find(x => x.id === id);
+    if(s) {
+        let hw = s.homework || new Array(50).fill(0);
+        hw[index] = parseInt(value);
+        await db.collection('students').doc(id).update({ homework: hw });
+    }
+};
+
+window.markAttendance = async (id) => {
+    const s = students.find(x => x.id.toLowerCase() === id.toLowerCase().trim());
+    if(s) {
+        await db.collection('students').doc(s.id).update({ 
+            attendance: (s.attendance || 0) + 1 
+        });
+        const log = document.getElementById('session-log');
+        log.value = `[${new Date().toLocaleTimeString()}] CHECK-IN: ${s.name}\n` + log.value;
+    }
+    document.getElementById('attendance-scan-input').value = '';
+};
+
+window.updateGlobalClasses = (v) => db.collection('settings').doc('global').set({ totalClassesHeld: parseInt(v) || 1 });
+
+window.saveStudent = async () => {
+    const id = document.getElementById('m-id').value.trim();
+    if(!id) return;
+    const old = students.find(x => x.id === id);
+    const data = {
+        id, name: document.getElementById('m-name').value, 
+        grade: document.getElementById('m-grade').value.toLowerCase().trim(),
+        phone: document.getElementById('m-phone').value,
+        fatherEmail: document.getElementById('m-f-email').value,
+        motherEmail: document.getElementById('m-m-email').value,
+        attendance: isEditing ? (old?.attendance || 0) : 0,
+        homework: isEditing ? (old?.homework || new Array(50).fill(0)) : new Array(50).fill(0)
+    };
+    await db.collection('students').doc(id).set(data);
+    closeStudentModal();
+};
+
 window.openStudentModal = (id = null) => {
-    const m = document.getElementById('student-modal');
-    m.classList.remove('hidden'); m.classList.add('flex');
+    document.getElementById('student-modal').classList.replace('hidden', 'flex');
     if(id) {
         isEditing = true;
         const s = students.find(x => x.id === id);
@@ -201,52 +237,14 @@ window.openStudentModal = (id = null) => {
 
 window.closeStudentModal = () => document.getElementById('student-modal').classList.replace('flex', 'hidden');
 
-window.saveStudent = async () => {
-    const id = document.getElementById('m-id').value.trim();
-    if(!id) return;
-    const old = students.find(x => x.id === id);
-    const s = {
-        id, name: document.getElementById('m-name').value, 
-        grade: document.getElementById('m-grade').value.toLowerCase().trim(),
-        phone: document.getElementById('m-phone').value,
-        fatherEmail: document.getElementById('m-f-email').value,
-        motherEmail: document.getElementById('m-m-email').value,
-        attendance: isEditing ? (old?.attendance || 0) : 0,
-        homework: isEditing ? (old?.homework || new Array(50).fill(0)) : new Array(50).fill(0)
-    };
-    await syncStudent(s);
-    closeStudentModal();
+window.updateGradeProp = async (id, prop, val) => {
+    await db.collection('grades').doc(id).update({ [prop]: prop === 'name' ? val : parseInt(val) });
 };
 
-// --- 6. CORE ACTIONS ---
-window.markAttendance = async (id) => {
-    const s = students.find(x => x.id.toLowerCase() === id.toLowerCase().trim());
-    if(s) {
-        s.attendance = (s.attendance || 0) + 1;
-        await syncStudent(s);
-        const log = document.getElementById('session-log');
-        log.value = `[${new Date().toLocaleTimeString()}] CHECK-IN: ${s.name}\n` + log.value;
-    }
-    const input = document.getElementById('attendance-scan-input');
-    if(input) { input.value = ''; input.focus(); }
-};
-
-window.updateHW = async (id, i, v) => {
-    const s = students.find(x => x.id === id);
-    if(s) { s.homework[i] = parseInt(v) || 0; await syncStudent(s); }
-};
-
-window.updateGradeProp = async (id, p, v) => {
-    if(!gradeConfig[id]) gradeConfig[id] = { name: "", lessons: 10, completed: 0 };
-    gradeConfig[id][p] = p === 'name' ? v : parseInt(v);
-    await syncGrade(id, gradeConfig[id]);
-};
-
-window.updateGlobalClasses = (v) => syncGlobal(parseInt(v) || 1);
 window.addNewGrade = async () => {
     const id = prompt("Grade ID (e.g. g1):")?.trim().toLowerCase();
     const name = prompt("Display Name:");
-    if(id && name) await syncGrade(id, { name, lessons: 10, completed: 0 });
+    if(id && name) await db.collection('grades').doc(id).set({ name, lessons: 10, completed: 0 });
 };
 
 window.deleteStudent = async (id) => { if(confirm("Delete student?")) await db.collection('students').doc(id).delete(); };
@@ -259,7 +257,6 @@ window.switchTab = (tab, el) => {
     if(el) el.classList.add('active-link');
 };
 
-// CSV Import
 window.handleCSVImport = (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
@@ -267,17 +264,17 @@ window.handleCSVImport = (e) => {
         const rows = event.target.result.split('\n').slice(1);
         for(let r of rows) {
             const c = r.split(',').map(x => x.trim());
-            if(c.length >= 6) await syncStudent({
+            if(c.length >= 6) await db.collection('students').doc(c[1]).set({
                 name: c[0], id: c[1], grade: c[2].toLowerCase(), phone: c[3], 
                 fatherEmail: c[4], motherEmail: c[5], attendance: 0, homework: new Array(50).fill(0)
             });
         }
-        alert("Imported to Cloud!");
+        alert("Imported!");
     };
     reader.readAsText(file);
 };
 
-// Standard Check-in
+// Barcode Scan Event
 document.addEventListener('keypress', (e) => {
     if(e.key === 'Enter') {
         const input = document.getElementById('attendance-scan-input');
@@ -285,5 +282,4 @@ document.addEventListener('keypress', (e) => {
     }
 });
 
-// Run session check on start
 checkSession();
