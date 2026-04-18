@@ -1,4 +1,4 @@
-// --- 1. FIREBASE CONFIG ---
+// --- 1. FIREBASE INITIALIZATION ---
 const firebaseConfig = {
   apiKey: "AIzaSyAM5deoGXltOAkYs3OQbL3Q-x-CD68bgxU",
   authDomain: "cts-admin-hub-8c1ec.firebaseapp.com",
@@ -9,276 +9,241 @@ const firebaseConfig = {
   measurementId: "G-N332B7X0W7"
 };
 
-if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+}
 const db = firebase.firestore();
 
+// Global State
 let students = [];
 let totalClassesHeld = 1;
 let gradeConfig = {};
 let isEditing = false;
 
-// --- 2. AUTH & SYNC ---
-const initApp = () => {
-    if (localStorage.getItem('cts_login') === 'true') {
-        document.getElementById('login-page').style.display = 'none';
-        document.getElementById('dashboard').classList.remove('hidden');
-        startSync();
-    }
-};
-
-window.checkAuth = () => {
-    if (document.getElementById('admin-pass').value === "Nalanda") {
-        localStorage.setItem('cts_login', 'true');
-        location.reload();
-    } else alert("Invalid Password");
-};
-
-window.logout = () => {
-    localStorage.removeItem('cts_login');
-    location.reload();
-};
-
-function startSync() {
-    db.collection('students').onSnapshot(s => {
-        students = s.docs.map(doc => ({...doc.data(), docId: doc.id}));
-        renderAll();
+// --- 2. REALTIME DATA SYNC ---
+const startRealtimeSync = () => {
+    // Listen for Students
+    db.collection('students').onSnapshot(snapshot => {
+        students = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+        refreshAllDataViews();
     });
-    db.collection('grades').onSnapshot(s => {
+
+    // Listen for Grades
+    db.collection('grades').onSnapshot(snapshot => {
         gradeConfig = {};
-        s.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
-        renderAll();
+        snapshot.forEach(doc => { 
+            gradeConfig[doc.id] = doc.data(); 
+        });
+        refreshAllDataViews(); // Critical: Refresh UI when grade is added
     });
+
+    // Listen for Settings
     db.collection('settings').doc('global').onSnapshot(doc => {
         if (doc.exists()) {
             totalClassesHeld = doc.data().totalClassesHeld || 1;
-            const inp = document.getElementById('global-classes-input');
-            if(inp) inp.value = totalClassesHeld;
-            renderAll();
+            refreshAllDataViews();
         }
     });
-}
+};
 
-const renderAll = () => {
+// --- 3. AUTH & NAVIGATION ---
+window.checkAuth = async () => {
+    const passInput = document.getElementById('admin-pass');
+    if (passInput && passInput.value === "Nalanda") {
+        document.getElementById('login-page').style.display = 'none';
+        document.getElementById('dashboard').classList.remove('hidden');
+        startRealtimeSync(); 
+    } else { alert("Invalid Password"); }
+};
+
+window.switchTab = (tab, el) => {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active-tab'));
+    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
+    document.getElementById(`tab-${tab}`).classList.add('active-tab');
+    if(el) el.classList.add('active-link');
+};
+
+// --- 4. RENDERERS (THE PIXEL PERFECT UI) ---
+const refreshAllDataViews = () => {
     renderStudentTable();
     renderDatabaseTable();
     renderGradeSettings();
     renderHomework();
-    if(document.getElementById('stat-total-students')) 
-        document.getElementById('stat-total-students').innerText = students.length;
+    if(document.getElementById('stat-total-students')) document.getElementById('stat-total-students').innerText = students.length;
+    if(document.getElementById('global-classes-input')) document.getElementById('global-classes-input').value = totalClassesHeld;
 };
 
-// --- 3. UI RENDERERS ---
 window.renderStudentTable = () => {
     const tbody = document.getElementById('student-list-body');
-    const search = document.getElementById('roster-search')?.value.toLowerCase() || "";
     if (!tbody) return;
-
-    tbody.innerHTML = students.filter(s => s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)).map(s => {
+    tbody.innerHTML = students.map(s => {
         const g = gradeConfig[s.grade] || { name: s.grade, completed: 0 };
-        const attPct = totalClassesHeld > 0 ? Math.min(Math.round((s.attendance / totalClassesHeld) * 100), 100) : 0;
+        const attPct = totalClassesHeld > 0 ? ((s.attendance / totalClassesHeld) * 100).toFixed(0) : 0;
         const comp = parseInt(g.completed) || 0;
-        const hwValues = s.homework ? s.homework.slice(0, comp) : [];
-        const hwAvg = comp > 0 ? Math.round(hwValues.reduce((a,b)=>a+(parseInt(b)||0), 0) / comp) : 0;
-
+        const hwSum = s.homework ? s.homework.slice(0, comp).reduce((a, b) => a + (parseInt(b) || 0), 0) : 0;
+        
         return `
-        <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-all group">
-            <td class="p-10">
-                <div class="font-bold text-white text-lg">${s.name}</div>
-                <div class="text-[10px] text-slate-500 font-mono tracking-widest">${s.id}</div>
-            </td>
-            <td class="p-10 text-[11px] uppercase text-blue-400 font-black tracking-widest">${g.name}</td>
-            <td class="p-10 text-center font-bold text-white text-xl">${attPct}%</td>
-            <td class="p-10 text-center font-bold text-emerald-500 text-xl">${hwAvg}%</td>
-            <td class="p-10 text-right space-x-4">
+        <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+            <td class="p-8"><div class="font-bold text-white text-lg">${s.name}</div><div class="text-[10px] text-slate-500 font-mono uppercase tracking-widest">${s.id}</div></td>
+            <td class="p-8 text-xs uppercase text-blue-400 font-black tracking-widest">${g.name}</td>
+            <td class="p-8 text-center font-bold text-white text-xl">${attPct}%</td>
+            <td class="p-8 text-center font-bold text-emerald-500 text-xl">${comp > 0 ? (hwSum/comp).toFixed(0) : 0}%</td>
+            <td class="p-8 text-right space-x-4">
                 <button onclick="openStudentModal('${s.id}')" class="text-slate-500 hover:text-blue-400 text-xl transition-all">✎</button>
-                <button onclick="deleteStudent('${s.id}')" class="text-slate-500 hover:text-rose-500 text-xl transition-all">🗑</button>
             </td>
         </tr>`;
     }).join('');
 };
 
+window.renderGradeSettings = () => {
+    const list = document.getElementById('grade-config-list');
+    if (!list) return;
+    const ids = Object.keys(gradeConfig);
+    
+    if (ids.length === 0) {
+        list.innerHTML = `<div class="col-span-2 text-center p-12 border-2 border-dashed border-white/5 rounded-3xl text-slate-600 font-bold uppercase text-[10px] tracking-[0.3em]">No Grades Configured</div>`;
+        return;
+    }
+
+    list.innerHTML = ids.map(id => `
+        <div class="glass-panel p-8 rounded-[2.5rem] border border-white/5 space-y-6">
+            <div class="flex justify-between items-center">
+                <span class="font-black text-blue-500 font-mono uppercase text-[10px] tracking-widest">${id}</span>
+                <button onclick="removeGrade('${id}')" class="text-rose-500 hover:bg-rose-500/10 px-3 py-1 rounded-lg text-[10px] font-black transition-all">DELETE</button>
+            </div>
+            <input type="text" value="${gradeConfig[id].name}" onchange="updateGradeProp('${id}','name',this.value)" class="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white text-sm outline-none focus:border-blue-500">
+            <div class="grid grid-cols-2 gap-4">
+                <div><label class="text-[9px] font-black text-slate-500 uppercase block mb-2">Lessons</label><input type="number" value="${gradeConfig[id].lessons}" onchange="updateGradeProp('${id}','lessons',this.value)" class="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-blue-400 text-xs text-center font-bold"></div>
+                <div><label class="text-[9px] font-black text-emerald-500 uppercase block mb-2">Current</label><input type="number" value="${gradeConfig[id].completed}" onchange="updateGradeProp('${id}','completed',this.value)" class="w-full bg-black/40 border border-white/10 p-3 rounded-xl text-emerald-400 text-xs text-center font-bold"></div>
+            </div>
+        </div>`).join('');
+};
+
 window.renderHomework = () => {
     const container = document.getElementById('hw-grade-container');
     if (!container) return;
-    const grades = [...new Set(students.map(s => s.grade))];
-
-    container.innerHTML = grades.map(gId => {
-        const sList = students.filter(s => s.grade === gId);
-        const g = gradeConfig[gId] || { name: gId, lessons: 10 };
+    const activeGrades = Object.keys(gradeConfig);
+    
+    container.innerHTML = activeGrades.map(gId => {
+        const list = students.filter(s => s.grade === gId);
+        const g = gradeConfig[gId];
+        if (list.length === 0) return '';
+        
         return `
-            <div class="glass-panel rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl">
-                <div class="p-8 bg-white/5 flex justify-between items-center border-b border-white/5">
-                    <span class="font-black text-blue-400 uppercase text-xs tracking-[0.2em]">${g.name}</span>
-                    <span class="text-slate-500 font-black text-[10px] uppercase tracking-widest">${g.lessons} Lessons Total</span>
-                </div>
-                ${sList.map(s => `
-                    <div class="p-8 flex flex-wrap justify-between items-center border-b border-white/5 last:border-0 hover:bg-white/[0.01]">
-                        <span class="text-base font-bold text-white w-64">${s.name}</span>
-                        <div class="flex flex-wrap gap-2 flex-1 justify-end">
-                            ${Array.from({length: g.lessons || 10}).map((_, i) => `
-                                <select onchange="updateHW('${s.id}', ${i}, this.value)" 
-                                        class="bg-black/40 border border-white/10 rounded-xl text-[10px] p-2 text-blue-400 outline-none">
-                                    <option value="0" ${s.homework?.[i] == 0 ? 'selected' : ''}>0</option>
-                                    <option value="25" ${s.homework?.[i] == 25 ? 'selected' : ''}>25</option>
-                                    <option value="50" ${s.homework?.[i] == 50 ? 'selected' : ''}>50</option>
-                                    <option value="75" ${s.homework?.[i] == 75 ? 'selected' : ''}>75</option>
-                                    <option value="100" ${s.homework?.[i] == 100 ? 'selected' : ''}>100</option>
-                                </select>
-                            `).join('')}
-                        </div>
-                    </div>`).join('')}
-            </div>`;
+        <div class="glass-panel rounded-[3rem] overflow-hidden mb-10 border border-white/5">
+            <div class="p-6 bg-white/5 flex justify-between items-center border-b border-white/5">
+                <span class="font-black text-blue-400 uppercase text-xs tracking-widest">${g.name}</span>
+                <span class="text-slate-500 font-black text-[9px] uppercase tracking-widest">${g.lessons} Lessons Total</span>
+            </div>
+            ${list.map(s => `
+                <div class="p-6 flex justify-between items-center border-b border-white/5 last:border-0">
+                    <span class="text-sm font-bold text-white w-48">${s.name}</span>
+                    <div class="flex gap-2 overflow-x-auto pb-2">
+                        ${Array.from({length: g.lessons}).map((_, i) => `
+                            <select onchange="updateHW('${s.id}', ${i}, this.value)" class="bg-black/40 border border-white/10 rounded-lg text-[9px] p-2 text-blue-400 outline-none">
+                                <option value="0" ${s.homework?.[i] == 0 ? 'selected' : ''}>0</option>
+                                <option value="100" ${s.homework?.[i] == 100 ? 'selected' : ''}>100</option>
+                            </select>
+                        `).join('')}
+                    </div>
+                </div>`).join('')}
+        </div>`;
     }).join('');
 };
 
 window.renderDatabaseTable = () => {
     const tbody = document.getElementById('database-list-body');
     if (!tbody) return;
-
     tbody.innerHTML = students.map(s => `
-        <tr class="border-b border-white/5 hover:bg-white/[0.01]">
-            <td class="p-10 font-bold text-white text-2xl">${s.name}<br><span class="text-[10px] text-slate-500 font-mono tracking-widest uppercase">${s.id}</span></td>
-            <td class="p-10 text-blue-400 font-black uppercase text-xs">${(gradeConfig[s.grade]?.name || s.grade)}</td>
-            <td class="p-10 text-slate-200 font-mono text-xl font-bold">${s.phone}</td>
-            <td class="p-10 text-slate-500 italic text-sm">
-                F: ${s.fatherEmail}<br>M: ${s.motherEmail}
-            </td>
-            <td class="p-10 text-right space-x-6">
-                <button onclick="downloadReportCard('${s.id}')" class="bg-blue-600/10 text-blue-400 px-6 py-3 rounded-xl font-black text-[10px] uppercase border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Report Card</button>
-                <button onclick="deleteStudent('${s.id}')" class="text-rose-500/20 hover:text-rose-500 text-xl transition-all">🗑</button>
+        <tr class="border-b border-white/5 text-sm hover:bg-white/[0.01] transition-colors">
+            <td class="p-8 font-bold text-white text-lg">${s.name}<br><span class="text-[10px] text-slate-500 font-mono tracking-widest uppercase">${s.id}</span></td>
+            <td class="p-8 text-blue-400 font-black uppercase text-xs tracking-widest">${(gradeConfig[s.grade]?.name || s.grade)}</td>
+            <td class="p-8 text-slate-300 font-mono text-lg">${s.phone}</td>
+            <td class="p-8 text-right space-x-4">
+                <button onclick="downloadReportCard('${s.id}')" class="bg-blue-600/10 text-blue-400 px-6 py-3 rounded-xl font-black text-[10px] uppercase border border-blue-500/20 hover:bg-blue-600 hover:text-white transition-all">Report</button>
+                <button onclick="deleteStudent('${s.id}')" class="text-rose-500/30 hover:text-rose-500 text-xl transition-all">🗑</button>
             </td>
         </tr>`).join('');
 };
 
-// --- 4. DATA MANAGEMENT & REPORTS ---
+// --- 5. ACTIONS & DATA MANAGEMENT ---
+window.addNewGrade = async () => {
+    const rawId = prompt("Enter Grade ID (e.g., g1a) - NO SPACES:");
+    if (!rawId) return;
+    const id = rawId.trim().toLowerCase().replace(/\s+/g, '');
+    const name = prompt("Enter Display Name (e.g., Grade 1 A):");
+    if (!name) return;
+    await db.collection('grades').doc(id).set({ name, lessons: 10, completed: 0 });
+};
+
 window.downloadReportCard = (id) => {
     const s = students.find(x => x.id === id);
-    const g = gradeConfig[s.grade] || { name: s.grade, completed: 0, lessons: 10 };
-    const attPct = totalClassesHeld > 0 ? Math.min(Math.round((s.attendance / totalClassesHeld) * 100), 100) : 0;
-    const comp = parseInt(g.completed) || 0;
-    const hwValues = s.homework ? s.homework.slice(0, comp) : [];
-    const hwAvg = comp > 0 ? Math.round(hwValues.reduce((a,b)=>a+(parseInt(b)||0), 0) / comp) : 0;
-
+    const g = gradeConfig[s.grade] || { name: s.grade, completed: 0 };
+    const attPct = totalClassesHeld > 0 ? ((s.attendance / totalClassesHeld) * 100).toFixed(0) : 0;
+    
     const report = window.open('', '_blank');
     report.document.write(`
-        <html><head><title>Report - ${s.name}</title><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;800&display=swap" rel="stylesheet">
+        <html><head><title>Report - ${s.name}</title>
         <style>
-            body { font-family: 'Outfit', sans-serif; padding: 60px; color: #0f172a; text-align: center; }
-            .border { border: 15px solid #0f172a; padding: 50px; border-radius: 4px; max-width: 800px; margin: auto; position: relative; }
-            h1 { font-size: 70px; margin: 0; letter-spacing: -4px; text-transform: uppercase; }
-            .name { font-size: 32px; font-weight: 800; margin: 40px 0 10px; text-transform: uppercase; color: #3b82f6; }
-            .grade { font-size: 14px; font-weight: 800; color: #64748b; margin-bottom: 50px; letter-spacing: 2px; }
-            .stats { display: flex; justify-content: space-around; border-top: 1px solid #eee; padding-top: 50px; }
-            .val { font-size: 80px; font-weight: 800; display: block; line-height: 1; }
-            .lbl { font-size: 10px; font-weight: 800; text-transform: uppercase; color: #94a3b8; letter-spacing: 1px; }
-            .print { position: fixed; top: 20px; right: 20px; background: #3b82f6; color: white; padding: 15px 30px; border-radius: 50px; cursor: pointer; font-weight: 800; border: none; }
-            @media print { .print { display: none; } }
+            body { font-family: sans-serif; padding: 50px; text-align: center; color: #1e293b; }
+            .card { border: 10px solid #1e293b; padding: 40px; border-radius: 10px; max-width: 600px; margin: auto; }
+            h1 { font-size: 50px; margin-bottom: 10px; }
+            .stats { display: flex; justify-content: space-around; margin-top: 40px; }
+            .val { font-size: 40px; font-weight: bold; color: #3b82f6; }
         </style></head>
-        <body><button class="print" onclick="window.print()">PRINT REPORT</button><div class="border">
-            <p style="font-weight: 800; letter-spacing: 3px; font-size: 12px; color: #94a3b8; margin:0;">OFFICIAL TRANSCRIPT</p>
-            <h1>RECORD</h1>
-            <div class="name">${s.name}</div>
-            <div class="grade">CLASS: ${g.name} | ID: ${s.id}</div>
+        <body><div class="card">
+            <p>OFFICIAL STUDENT RECORD</p>
+            <h1>${s.name}</h1>
+            <p>ID: ${s.id} | Grade: ${g.name}</p>
             <div class="stats">
-                <div><span class="val">${attPct}%</span><span class="lbl">Attendance</span></div>
-                <div><span class="val">${hwAvg}%</span><span class="lbl">Homework Score</span></div>
+                <div><div class="val">${attPct}%</div><div>Attendance</div></div>
+                <div><div class="val">${s.attendance}</div><div>Total Present</div></div>
             </div>
-            <p style="margin-top: 60px; font-size: 11px; color: #cbd5e1;">Generated on ${new Date().toLocaleDateString()} by CTS Cloud Admin Hub</p>
+            <button onclick="window.print()" style="margin-top:40px; padding:10px 20px; cursor:pointer;">Print Report Card</button>
         </div></body></html>
     `);
 };
 
 window.downloadFullBackup = () => {
-    const backup = { students, gradeConfig, totalClassesHeld, date: new Date().toISOString() };
-    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const data = { students, gradeConfig, totalClassesHeld, exportDate: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `CTS_Cloud_Backup_${new Date().toLocaleDateString()}.json`;
+    a.download = `CTS_HUB_BACKUP_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
 };
 
 window.dangerZoneReset = async () => {
-    if (confirm("DANGER: This will delete ALL data. Are you sure?")) {
+    if (confirm("DANGER: This will wipe EVERYTHING in the cloud. Continue?")) {
         const pass = prompt("Type 'DELETE' to confirm:");
         if (pass === "DELETE") {
-            const batch = db.batch();
             const sSnap = await db.collection('students').get();
-            sSnap.forEach(d => batch.delete(d.ref));
             const gSnap = await db.collection('grades').get();
-            gSnap.forEach(d => batch.delete(d.ref));
+            const batch = db.batch();
+            sSnap.forEach(doc => batch.delete(doc.ref));
+            gSnap.forEach(doc => batch.delete(doc.ref));
             await batch.commit();
             location.reload();
         }
     }
 };
 
-// --- 5. LOGIC HELPERS ---
-window.updateHW = async (id, i, val) => {
-    const s = students.find(x => x.id === id);
+window.updateGradeProp = async (id, p, v) => db.collection('grades').doc(id).update({ [p]: p === 'name' ? v : parseInt(v) });
+window.removeGrade = async (id) => { if(confirm("Delete Grade Level?")) await db.collection('grades').doc(id).delete(); };
+window.updateGlobalClasses = (v) => db.collection('settings').doc('global').set({ totalClassesHeld: parseInt(v) || 1 });
+window.updateHW = async (sId, i, v) => {
+    const s = students.find(x => x.id === sId);
     if(s) {
         let hwArr = s.homework || new Array(50).fill(0);
-        hwArr[i] = parseInt(val);
-        await db.collection('students').doc(id).update({ homework: hwArr });
+        hwArr[i] = parseInt(v);
+        await db.collection('students').doc(sId).update({ homework: hwArr });
     }
 };
 
-window.markAttendance = async (barcode) => {
-    const s = students.find(x => x.id.toLowerCase() === barcode.toLowerCase().trim());
-    if(s) {
-        await db.collection('students').doc(s.id).update({ attendance: (s.attendance || 0) + 1 });
-        const log = document.getElementById('session-log');
-        log.value = `[${new Date().toLocaleTimeString()}] CHECK-IN: ${s.name}\n` + log.value;
-    }
-    document.getElementById('attendance-scan-input').value = '';
-};
-
-window.updateGlobalClasses = (v) => db.collection('settings').doc('global').set({ totalClassesHeld: parseInt(v) || 1 });
-
-window.saveStudent = async () => {
-    const id = document.getElementById('m-id').value.trim();
-    if(!id) return;
-    const old = students.find(x => x.id === id);
-    const payload = {
-        id, name: document.getElementById('m-name').value, 
-        grade: document.getElementById('m-grade').value.toLowerCase().trim(),
-        phone: document.getElementById('m-phone').value,
-        fatherEmail: document.getElementById('m-f-email').value,
-        motherEmail: document.getElementById('m-m-email').value,
-        attendance: isEditing ? (old?.attendance || 0) : 0,
-        homework: isEditing ? (old?.homework || new Array(50).fill(0)) : new Array(50).fill(0)
-    };
-    await db.collection('students').doc(id).set(payload);
-    closeStudentModal();
-};
-
-document.getElementById('csv-file-input')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-        const rows = ev.target.result.split('\n').slice(1);
-        for(let r of rows) {
-            const c = r.split(',').map(x => x.trim());
-            if(c.length >= 6) {
-                await db.collection('students').doc(c[1]).set({
-                    name: c[0], id: c[1], grade: c[2].toLowerCase(), phone: c[3], 
-                    fatherEmail: c[4], motherEmail: c[5], attendance: 0, homework: new Array(50).fill(0)
-                });
-            }
-        }
-        alert("Imported!");
-    };
-    reader.readAsText(file);
-});
-
-document.addEventListener('keypress', (e) => {
-    if(e.key === 'Enter') {
-        const inp = document.getElementById('attendance-scan-input');
-        if(document.activeElement === inp) markAttendance(inp.value);
-    }
-});
-
+// --- 6. MODAL & ATTENDANCE ---
 window.openStudentModal = (id = null) => {
-    document.getElementById('student-modal').classList.replace('hidden', 'flex');
+    const modal = document.getElementById('student-modal');
+    modal.classList.replace('hidden', 'flex');
     if(id) {
         isEditing = true;
         const s = students.find(x => x.id === id);
@@ -291,24 +256,40 @@ window.openStudentModal = (id = null) => {
     } else {
         isEditing = false;
         document.getElementById('m-id').disabled = false;
-        ['m-id', 'm-name', 'm-grade', 'm-phone', 'm-f-email', 'm-m-email'].forEach(f => document.getElementById(f).value = '');
+        ['m-id', 'm-name', 'm-grade', 'm-phone', 'm-f-email', 'm-m-email'].forEach(fid => document.getElementById(fid).value = '');
     }
 };
 
-window.closeStudentModal = () => document.getElementById('student-modal').classList.replace('flex', 'hidden');
-window.updateGradeProp = async (id, p, v) => db.collection('grades').doc(id).update({ [p]: p === 'name' ? v : parseInt(v) });
-window.addNewGrade = async () => {
-    const id = prompt("ID:")?.toLowerCase();
-    const name = prompt("Name:");
-    if(id && name) await db.collection('grades').doc(id).set({ name, lessons: 10, completed: 0 });
-};
-window.deleteStudent = async (id) => { if(confirm("Delete?")) await db.collection('students').doc(id).delete(); };
-window.removeGrade = async (id) => { if(confirm("Delete?")) await db.collection('grades').doc(id).delete(); };
-window.switchTab = (tab, el) => {
-    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active-tab'));
-    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
-    document.getElementById(`tab-${tab}`).classList.add('active-tab');
-    if(el) el.classList.add('active-link');
+window.saveStudent = async () => {
+    const id = document.getElementById('m-id').value.trim();
+    if(!id) return;
+    const old = students.find(x => x.id === id);
+    const s = {
+        id, name: document.getElementById('m-name').value,
+        grade: document.getElementById('m-grade').value.toLowerCase().trim(),
+        phone: document.getElementById('m-phone').value,
+        fatherEmail: document.getElementById('m-f-email').value,
+        motherEmail: document.getElementById('m-m-email').value,
+        attendance: isEditing ? (old?.attendance || 0) : 0,
+        homework: isEditing ? (old?.homework || new Array(50).fill(0)) : new Array(50).fill(0)
+    };
+    await db.collection('students').doc(id).set(s);
+    document.getElementById('student-modal').classList.replace('flex', 'hidden');
 };
 
-initApp();
+window.markAttendance = async (barcode) => {
+    const s = students.find(x => x.id.toLowerCase() === barcode.toLowerCase().trim());
+    if(s) {
+        await db.collection('students').doc(s.id).update({ attendance: (s.attendance || 0) + 1 });
+        const log = document.getElementById('session-log');
+        log.value = `[${new Date().toLocaleTimeString()}] CHECK-IN: ${s.name}\n` + log.value;
+    }
+    document.getElementById('attendance-scan-input').value = '';
+};
+
+document.addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') {
+        const scanner = document.getElementById('attendance-scan-input');
+        if(document.activeElement === scanner) markAttendance(scanner.value);
+    }
+});
