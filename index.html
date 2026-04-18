@@ -109,5 +109,22 @@
         </main>
     </div>
     <script src="app.js"></script>
+    <div id="student-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
+    <div class="glass-panel p-8 rounded-3xl border border-white/10 w-full max-w-lg">
+        <h2 id="modal-title" class="text-2xl font-black text-white mb-6 italic">ADD <span class="text-blue-500">STUDENT</span></h2>
+        <div class="grid grid-cols-1 gap-4">
+            <input type="text" id="m-id" placeholder="Student ID (Unique)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+            <input type="text" id="m-name" placeholder="Full Name" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+            <input type="text" id="m-grade" placeholder="Grade ID (e.g., g1)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+            <input type="text" id="m-phone" placeholder="Phone Number" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+            <input type="email" id="m-f-email" placeholder="Father's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+            <input type="email" id="m-m-email" placeholder="Mother's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
+        </div>
+        <div class="flex gap-4 mt-8">
+            <button onclick="closeStudentModal()" class="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-colors">Cancel</button>
+            <button onclick="saveStudent()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-colors">Save Student</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
