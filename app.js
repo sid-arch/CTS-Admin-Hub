@@ -1,22 +1,62 @@
-let students = JSON.parse(localStorage.getItem('cts_students')) || [];
-let totalClassesHeld = parseInt(localStorage.getItem('cts_total_classes')) || 1;
-let gradeConfig = JSON.parse(localStorage.getItem('cts_grades')) || {
-    "g1": { name: "Grade 1", lessons: 10, completed: 0 }
+// --- 1. FIREBASE INITIALIZATION ---
+// Paste the config you got from the Firebase Web App setup here:
+const firebaseConfig = {
+  apiKey: "AIzaSyAM5deoGXltOAkYs3OQbL3Q-x-CD68bgxU",
+  authDomain: "cts-admin-hub-8c1ec.firebaseapp.com",
+  projectId: "cts-admin-hub-8c1ec",
+  storageBucket: "cts-admin-hub-8c1ec.firebasestorage.app",
+  messagingSenderId: "323202681156",
+  appId: "1:323202681156:web:1acf1d6f3a150a48e82f11",
+  measurementId: "G-N332B7X0W7"
 };
 
-const save = () => {
-    localStorage.setItem('cts_students', JSON.stringify(students));
-    localStorage.setItem('cts_total_classes', totalClassesHeld.toString());
-    localStorage.setItem('cts_grades', JSON.stringify(gradeConfig));
-    refreshAllDataViews();
+// Initialize Firebase App and Firestore
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let students = [];
+let totalClassesHeld = 1;
+let gradeConfig = {};
+
+// --- 2. DATA SYNC FUNCTIONS ---
+
+// Load all data from Firestore
+const loadFromCloud = async () => {
+    try {
+        // Get Students
+        const studentSnap = await db.collection('students').get();
+        students = studentSnap.docs.map(doc => doc.data());
+
+        // Get Grades
+        const gradeSnap = await db.collection('grades').get();
+        gradeConfig = {};
+        gradeSnap.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
+
+        // Get Global Settings
+        const setSnap = await db.collection('settings').doc('global').get();
+        if (setSnap.exists()) {
+            totalClassesHeld = setSnap.data().totalClassesHeld || 1;
+        }
+
+        refreshAllDataViews();
+    } catch (err) {
+        console.error("Error loading cloud data:", err);
+    }
 };
+
+// Functions to update the cloud
+const syncStudent = (s) => db.collection('students').doc(s.id).set(s);
+const syncGrade = (id, data) => db.collection('grades').doc(id).set(data);
+const syncGlobal = (val) => db.collection('settings').doc('global').set({ totalClassesHeld: val });
+
+// --- 3. UI HANDLERS ---
 
 window.checkAuth = () => {
     const passInput = document.getElementById('admin-pass');
     if (passInput && passInput.value === "Nalanda") {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('dashboard').classList.remove('hidden');
-        refreshAllDataViews();
+        loadFromCloud(); // Pull data from cloud on login
     } else { alert("Invalid Password"); }
 };
 
@@ -30,6 +70,8 @@ const refreshAllDataViews = () => {
         document.getElementById('global-classes-input').value = totalClassesHeld;
 };
 
+// --- RENDERERS ---
+
 window.renderStudentTable = () => {
     const tbody = document.getElementById('student-list-body');
     const search = document.getElementById('roster-search')?.value.toLowerCase() || "";
@@ -38,10 +80,12 @@ window.renderStudentTable = () => {
     const filtered = students.filter(s => s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search));
 
     tbody.innerHTML = filtered.map(s => {
-        const g = gradeConfig[s.grade] || { name: "Grade " + s.grade.replace(/\D/g,''), completed: 0 };
-        const attPct = ((s.attendance / totalClassesHeld) * 100).toFixed(0);
+        const gId = s.grade.toLowerCase();
+        const g = gradeConfig[gId] || { name: "Grade " + gId.replace(/\D/g,''), completed: 0 };
+        
+        const attPct = totalClassesHeld > 0 ? ((s.attendance / totalClassesHeld) * 100).toFixed(0) : 0;
         const comp = parseInt(g.completed) || 0;
-        const hwSum = s.homework.slice(0, comp).reduce((a, b) => a + (parseInt(b) || 0), 0);
+        const hwSum = s.homework ? s.homework.slice(0, comp).reduce((a, b) => a + (parseInt(b) || 0), 0) : 0;
         const hwPct = comp > 0 ? (hwSum / comp).toFixed(0) : 0;
 
         return `
@@ -53,7 +97,7 @@ window.renderStudentTable = () => {
             <td class="p-6 text-xs uppercase text-blue-400 font-black">${g.name}</td>
             <td class="p-6 text-center">${attPct}%</td>
             <td class="p-6 text-center font-bold text-emerald-500">${hwPct}%</td>
-            <td class="p-6 text-right"><button onclick="deleteStudent('${s.id}')" class="levitate p-2 hover:text-red-500">🗑</button></td>
+            <td class="p-6 text-right"><button onclick="deleteStudent('${s.id}')" class="levitate p-2 hover:text-red-500 transition-transform">🗑</button></td>
         </tr>`;
     }).join('');
 };
@@ -70,8 +114,8 @@ window.renderHomework = () => {
             <div class="p-4 flex justify-between items-center border-b border-white/5">
                 <span class="text-sm font-bold text-white">${s.name}</span>
                 <div class="flex gap-1 overflow-x-auto max-w-[60%]">
-                    ${Array.from({length: g.lessons}).map((_, i) => `
-                        <input type="number" value="${s.homework[i] || 0}" class="hw-percent-input w-10" 
+                    ${Array.from({length: g.lessons || 10}).map((_, i) => `
+                        <input type="number" value="${s.homework[i] || 0}" class="hw-percent-input w-10 flex-shrink-0" 
                         onchange="updateHW('${s.id}', ${i}, this.value)">
                     `).join('')}
                 </div>
@@ -84,9 +128,11 @@ window.renderDatabaseTable = () => {
     const tbody = document.getElementById('database-list-body');
     const search = document.getElementById('db-search')?.value.toLowerCase() || "";
     if (!tbody) return;
+
     const filtered = students.filter(s => s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search));
+
     tbody.innerHTML = filtered.map(s => `
-        <tr class="border-b border-white/5 text-sm">
+        <tr class="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
             <td class="p-6 font-bold text-white">${s.name}<br><span class="text-[10px] text-slate-500 font-mono">${s.id}</span></td>
             <td class="p-6 text-blue-400 font-black">${(gradeConfig[s.grade]?.name || "Grade " + s.grade.replace(/\D/g,''))}</td>
             <td class="p-6">${s.phone}</td>
@@ -127,40 +173,53 @@ window.updateDashboardStats = () => {
     }).join('');
 };
 
+// --- ACTIONS ---
+
 window.markAttendance = (id) => {
     const s = students.find(x => x.id === id);
     if(s) {
         s.attendance += 1;
+        syncStudent(s);
         document.getElementById('session-log').prepend(`[${new Date().toLocaleTimeString()}] ${s.name} present.\n`);
-        save();
+        refreshAllDataViews();
     }
 };
 
 window.updateHW = (sId, i, v) => {
     const s = students.find(x => x.id === sId);
-    if(s) { s.homework[i] = parseInt(v) || 0; save(); }
+    if(s) { 
+        if(!s.homework) s.homework = new Array(30).fill(0);
+        s.homework[i] = parseInt(v) || 0; 
+        syncStudent(s);
+    }
 };
 
 window.updateGradeProp = (id, p, v) => { 
-    gradeConfig[id][p] = p === 'name' ? v : parseInt(v); save(); 
+    if(!gradeConfig[id]) gradeConfig[id] = { name: "", lessons: 10, completed: 0 };
+    gradeConfig[id][p] = p === 'name' ? v : parseInt(v); 
+    syncGrade(id, gradeConfig[id]);
+    refreshAllDataViews(); 
 };
 
 window.handleCSVImport = (event) => {
     const file = event.target.files[0];
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         const rows = e.target.result.split('\n').slice(1);
-        rows.forEach(row => {
+        for (let row of rows) {
             const cols = row.split(',');
             if (cols.length >= 6) {
-                students.push({
+                const s = {
                     name: cols[0].trim(), id: cols[1].trim(), grade: cols[2].trim().toLowerCase(),
                     phone: cols[3].trim(), fatherEmail: cols[4].trim(), motherEmail: cols[5].trim(),
                     attendance: 0, homework: new Array(30).fill(0)
-                });
+                };
+                students.push(s);
+                await syncStudent(s);
             }
-        });
-        save();
+        }
+        refreshAllDataViews();
+        alert("Imported and synced to cloud!");
     };
     reader.readAsText(file);
 };
@@ -170,13 +229,34 @@ window.addNewGrade = () => {
     if(!id) return;
     const name = prompt("Enter Display Name (e.g., Grade 1):");
     if(!name) return;
-    gradeConfig[id.toLowerCase()] = { name, lessons: 10, completed: 0 };
-    save();
+    const data = { name, lessons: 10, completed: 0 };
+    gradeConfig[id.toLowerCase()] = data;
+    syncGrade(id.toLowerCase(), data);
+    refreshAllDataViews();
 };
 
-window.removeGrade = (id) => { if(confirm("Delete?")) { delete gradeConfig[id]; save(); } };
-window.deleteStudent = (id) => { if(confirm("Delete student?")) { students = students.filter(s => s.id !== id); save(); } };
-window.updateGlobalClasses = (v) => { totalClassesHeld = parseInt(v) || 1; save(); };
+window.removeGrade = async (id) => { 
+    if(confirm("Delete Grade Level?")) { 
+        await db.collection('grades').doc(id).delete();
+        delete gradeConfig[id]; 
+        refreshAllDataViews(); 
+    } 
+};
+
+window.deleteStudent = async (id) => { 
+    if(confirm("Delete student?")) { 
+        await db.collection('students').doc(id).delete();
+        students = students.filter(s => s.id !== id); 
+        refreshAllDataViews(); 
+    } 
+};
+
+window.updateGlobalClasses = (v) => { 
+    totalClassesHeld = parseInt(v) || 1; 
+    syncGlobal(totalClassesHeld);
+    renderStudentTable();
+};
+
 window.switchTab = (tab, el) => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active-tab'));
     document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active-link'));
