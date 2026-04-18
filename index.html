@@ -17,75 +17,81 @@
     <div id="login-page" class="fixed inset-0 bg-[#000000] flex items-center justify-center z-[100] p-4">
         <div class="glass-panel p-10 rounded-3xl shadow-2xl w-full max-w-md border border-white/10 text-center">
             <h1 class="text-3xl font-extrabold text-white mb-8 italic tracking-tighter">CTS <span class="text-blue-500">ADMIN HUB</span></h1>
-            <input type="password" id="admin-pass" placeholder="Password" class="w-full bg-black/40 border border-white/10 p-4 rounded-2xl mb-6 text-center text-white text-xl outline-none">
-            <button onclick="checkAuth()" class="levitate bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-2xl w-full font-bold uppercase tracking-widest">Log In</button>
+            <input type="password" id="admin-pass" placeholder="Enter Admin Password" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500 transition-all mb-4 text-center">
+            <button onclick="checkAuth()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-500/20">ACCESS HUB</button>
         </div>
     </div>
 
-    <div id="dashboard" class="hidden flex min-h-screen">
-        <aside class="w-72 bg-[#020617] border-r border-white/5 flex flex-col sticky top-0 h-screen">
-            <div class="p-8 text-white font-black text-2xl italic">CTS<span class="text-blue-500">.</span></div>
-            <nav class="flex-1 px-4 space-y-1">
-                <button onclick="switchTab('attendance', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4"><span>📅</span> Attendance</button>
-                <button onclick="switchTab('homework', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4"><span>📚</span> Homework</button>
-                <button onclick="switchTab('students', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4"><span>👥</span> Roster</button>
-                <button onclick="switchTab('database', this)" class="nav-link w-full text-left p-4 rounded-2xl flex items-center gap-4 active-link"><span>📂</span> Database</button>
+    <div id="dashboard" class="hidden flex flex-col md:flex-row min-h-screen">
+        <aside class="w-full md:w-72 bg-[#020617] border-r border-white/5 p-8 flex flex-col gap-8">
+            <div class="px-4"><h2 class="text-xl font-black text-white italic">CTS <span class="text-blue-500">HUB</span></h2></div>
+            <nav class="flex flex-col gap-2">
+                <button onclick="switchTab('roster', this)" class="nav-link active-link p-4 rounded-2xl flex items-center gap-4 font-bold text-sm">Dashboard</button>
+                <button onclick="switchTab('attendance', this)" class="nav-link p-4 rounded-2xl flex items-center gap-4 font-bold text-sm">Attendance</button>
+                <button onclick="switchTab('homework', this)" class="nav-link p-4 rounded-2xl flex items-center gap-4 font-bold text-sm">Homework</button>
+                <button onclick="switchTab('database', this)" class="nav-link p-4 rounded-2xl flex items-center gap-4 font-bold text-sm">Database</button>
+                <button onclick="switchTab('settings', this)" class="nav-link p-4 rounded-2xl flex items-center gap-4 font-bold text-sm">Settings</button>
             </nav>
-            <div class="p-6 border-t border-white/5 space-y-2">
-                <button onclick="switchTab('settings', this)" class="w-full text-left p-4 text-slate-500 hover:text-white flex items-center gap-4 text-sm font-bold"><span>⚙️</span> Settings</button>
-                <button onclick="location.reload()" class="w-full text-left p-4 text-red-400 text-sm font-bold"><span>🔒</span> Logout</button>
-            </div>
         </aside>
 
-        <main class="flex-1 p-10 bg-gradient-to-br from-[#020617] to-[#0f172a] overflow-y-auto">
+        <main class="flex-1 p-6 md:p-12 overflow-y-auto">
             
-            <section id="tab-attendance" class="tab-content">
-                <div class="glass-panel p-8 rounded-3xl border border-white/5 mb-8">
-                    <input type="text" id="manual-att-search" placeholder="Scan Student ID..." onkeydown="if(event.key==='Enter') markAttendance(this.value)" class="w-full bg-black/40 border border-white/10 p-5 rounded-2xl text-white outline-none">
+            <section id="tab-roster" class="tab-content active-tab">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                    <div>
+                        <h1 class="text-4xl font-black text-white italic mb-2">STUDENT <span class="text-blue-500">ROSTER</span></h1>
+                        <p class="text-slate-500 text-sm font-medium">Total Registered: <span id="stat-total-students" class="text-white">0</span></p>
+                    </div>
+                    <div class="flex gap-3">
+                        <label class="levitate bg-white/5 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase cursor-pointer border border-white/5 hover:bg-white/10">
+                            Import CSV <input type="file" class="hidden" onchange="handleCSVImport(event)" accept=".csv">
+                        </label>
+                        <button onclick="openStudentModal()" class="levitate bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase shadow-lg shadow-blue-600/20">Add Student</button>
+                    </div>
                 </div>
-                <div id="session-log" class="glass-panel p-6 rounded-3xl border border-white/5 min-h-[150px] font-mono text-xs">Activity Log...</div>
-            </section>
 
-            <section id="tab-homework" class="tab-content">
-                <div id="hw-grade-container" class="space-y-6"></div>
-            </section>
+                <div class="mb-8"><input type="text" id="roster-search" oninput="renderStudentTable()" placeholder="Search by name or ID..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none focus:border-blue-500"></div>
 
-            <section id="tab-students" class="tab-content">
-                <div class="glass-panel p-6 rounded-3xl border border-white/5 mb-8 text-center">
-                    <input type="text" id="roster-search" oninput="renderStudentTable()" placeholder="Search Roster..." class="w-full bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none">
-                </div>
-                <div class="glass-panel rounded-3xl border border-white/5 overflow-hidden">
-                    <table class="w-full text-left">
-                        <thead class="bg-white/5 text-[11px] uppercase tracking-widest font-black text-slate-500">
-                            <tr><th class="p-6">Student</th><th class="p-6">Grade</th><th class="p-6 text-center">Att %</th><th class="p-6 text-center">HW %</th><th class="p-6 text-right">Action</th></tr>
+                <div class="glass-panel rounded-3xl overflow-hidden border border-white/5">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-white/5 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                <th class="p-6">Student Information</th><th class="p-6">Grade</th><th class="p-6 text-center">Attendance</th><th class="p-6 text-center">Homework</th><th class="p-6 text-right">Actions</th>
+                            </tr>
                         </thead>
                         <tbody id="student-list-body"></tbody>
                     </table>
                 </div>
             </section>
 
-            <section id="tab-database" class="tab-content active-tab">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div class="glass-panel p-6 rounded-3xl border border-white/5">
-                        <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Students</p>
-                        <h2 class="text-4xl font-black text-white" id="stat-total-students">0</h2>
+            <section id="tab-attendance" class="tab-content">
+                <h1 class="text-4xl font-black text-white italic mb-8">LIVE <span class="text-emerald-500">ATTENDANCE</span></h1>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 space-y-4">
+                        <input type="text" id="attendance-scan-input" placeholder="Ready to Scan Barcode..." class="w-full bg-black/40 border-2 border-blue-500/20 p-6 rounded-3xl text-2xl text-white outline-none focus:border-blue-500 font-mono mb-4">
+                        <div id="attendance-list-container"></div>
                     </div>
-                    <div id="grade-stats-container" class="md:col-span-2 flex gap-4 overflow-x-auto pb-2"></div>
-                </div>
-
-                <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
-                    <input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search Database..." class="w-full md:w-96 bg-black/40 border border-white/10 p-4 rounded-2xl text-white outline-none">
-                    <div class="flex gap-4">
-                        <input type="file" id="csv-import" accept=".csv" class="hidden" onchange="handleCSVImport(event)">
-                        <button onclick="openStudentModal()" class="levitate bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase">Add Student</button>
-                        <button onclick="document.getElementById('csv-import').click()" class="levitate bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold text-xs uppercase">Import CSV</button>
+                    <div class="glass-panel p-6 rounded-3xl border border-white/5 h-fit">
+                        <h3 class="text-white font-bold uppercase text-xs mb-4">Session Log (Recent First)</h3>
+                        <textarea id="session-log" readonly class="w-full h-96 bg-black/40 border border-white/10 rounded-2xl p-4 font-mono text-xs text-emerald-400 outline-none resize-none"></textarea>
                     </div>
                 </div>
+            </section>
 
-                <div class="glass-panel rounded-3xl border border-white/5 overflow-x-auto">
-                    <table class="w-full text-left min-w-[1000px]">
-                        <thead class="bg-white/5 text-[11px] uppercase font-black text-slate-500">
-                            <tr><th class="p-6">Name/ID</th><th class="p-6">Grade</th><th class="p-6">Phone</th><th class="p-6">Father Email</th><th class="p-6">Mother Email</th><th class="p-6 text-right">Action</th></tr>
+            <section id="tab-homework" class="tab-content">
+                <h1 class="text-4xl font-black text-white italic mb-8">HOMEWORK <span class="text-blue-500">TRACKING</span></h1>
+                <div id="hw-grade-container" class="space-y-8"></div>
+            </section>
+
+            <section id="tab-database" class="tab-content">
+                <h1 class="text-4xl font-black text-white italic mb-8">CONTACT <span class="text-blue-500">DATABASE</span></h1>
+                <div class="mb-8"><input type="text" id="db-search" oninput="renderDatabaseTable()" placeholder="Search contacts..." class="w-full max-w-md bg-white/5 border border-white/10 p-4 rounded-2xl text-white outline-none"></div>
+                <div class="glass-panel rounded-3xl overflow-x-auto border border-white/5">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="bg-white/5 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                <th class="p-6">Name</th><th class="p-6">Grade</th><th class="p-6">Phone</th><th class="p-6">Father Email</th><th class="p-6">Mother Email</th><th class="p-6 text-right">Action</th>
+                            </tr>
                         </thead>
                         <tbody id="database-list-body"></tbody>
                     </table>
@@ -109,23 +115,25 @@
             </section>
         </main>
     </div>
-    <script src="app.js"></script>
-    <div id="student-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
-    <div class="glass-panel p-8 rounded-3xl border border-white/10 w-full max-w-lg">
-        <h2 id="modal-title" class="text-2xl font-black text-white mb-6 italic">ADD <span class="text-blue-500">STUDENT</span></h2>
-        <div class="grid grid-cols-1 gap-4">
-            <input type="text" id="m-id" placeholder="Student ID (Unique)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-            <input type="text" id="m-name" placeholder="Full Name" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-            <input type="text" id="m-grade" placeholder="Grade ID (e.g., g1)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-            <input type="text" id="m-phone" placeholder="Phone Number" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-            <input type="email" id="m-f-email" placeholder="Father's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-            <input type="email" id="m-m-email" placeholder="Mother's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none">
-        </div>
-        <div class="flex gap-4 mt-8">
-            <button onclick="closeStudentModal()" class="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl font-bold transition-colors">Cancel</button>
-            <button onclick="saveStudent()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-500/20 transition-colors">Save Student</button>
+
+    <div id="student-modal" class="fixed inset-0 bg-black/90 backdrop-blur-sm hidden items-center justify-center z-[110] p-4">
+        <div class="glass-panel p-8 rounded-3xl border border-white/10 w-full max-w-lg">
+            <h2 id="modal-title" class="text-2xl font-black text-white mb-6 italic uppercase">ADD <span class="text-blue-500">STUDENT</span></h2>
+            <div class="grid grid-cols-1 gap-4">
+                <input type="text" id="m-id" placeholder="Student ID (Unique Barcode)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                <input type="text" id="m-name" placeholder="Full Name" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                <input type="text" id="m-grade" placeholder="Grade ID (e.g., g1a)" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                <input type="text" id="m-phone" placeholder="Phone Number" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                <input type="email" id="m-f-email" placeholder="Father's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+                <input type="email" id="m-m-email" placeholder="Mother's Email" class="bg-black/40 border border-white/10 p-3 rounded-xl text-white outline-none focus:border-blue-500">
+            </div>
+            <div class="flex gap-4 mt-8">
+                <button onclick="closeStudentModal()" class="flex-1 bg-white/5 text-white py-3 rounded-xl font-bold">Cancel</button>
+                <button onclick="saveStudent()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold">Save Student</button>
+            </div>
         </div>
     </div>
-</div>
+
+    <script src="app.js"></script>
 </body>
 </html>
