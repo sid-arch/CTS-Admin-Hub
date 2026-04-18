@@ -1,5 +1,4 @@
 // --- 1. FIREBASE INITIALIZATION ---
-// Paste the config you got from the Firebase Web App setup here:
 const firebaseConfig = {
   apiKey: "AIzaSyAM5deoGXltOAkYs3OQbL3Q-x-CD68bgxU",
   authDomain: "cts-admin-hub-8c1ec.firebaseapp.com",
@@ -10,7 +9,6 @@ const firebaseConfig = {
   measurementId: "G-N332B7X0W7"
 };
 
-// Initialize Firebase App and Firestore
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
@@ -18,46 +16,48 @@ let students = [];
 let totalClassesHeld = 1;
 let gradeConfig = {};
 
-// --- 2. DATA SYNC FUNCTIONS ---
+// --- 2. DATA SYNC FUNCTIONS (REALTIME) ---
 
-// Load all data from Firestore
-const loadFromCloud = async () => {
-    try {
-        // Get Students
-        const studentSnap = await db.collection('students').get();
-        students = studentSnap.docs.map(doc => doc.data());
-
-        // Get Grades
-        const gradeSnap = await db.collection('grades').get();
-        gradeConfig = {};
-        gradeSnap.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
-
-        // Get Global Settings
-        const setSnap = await db.collection('settings').doc('global').get();
-        if (setSnap.exists()) {
-            totalClassesHeld = setSnap.data().totalClassesHeld || 1;
-        }
-
+// This replaces loadFromCloud to ensure UI stays synced with Firestore automatically
+const startRealtimeSync = () => {
+    // Listen for Students
+    db.collection('students').onSnapshot(snapshot => {
+        students = snapshot.docs.map(doc => doc.data());
         refreshAllDataViews();
-    } catch (err) {
-        console.error("Error loading cloud data:", err);
-    }
+    }, err => console.error("Student sync error:", err));
+
+    // Listen for Grade Configurations
+    db.collection('grades').onSnapshot(snapshot => {
+        gradeConfig = {};
+        snapshot.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
+        refreshAllDataViews();
+    }, err => console.error("Grade sync error:", err));
+
+    // Listen for Global Settings
+    db.collection('settings').doc('global').onSnapshot(doc => {
+        if (doc.exists()) {
+            totalClassesHeld = doc.data().totalClassesHeld || 1;
+            refreshAllDataViews();
+        }
+    }, err => console.error("Global settings error:", err));
 };
 
-// Functions to update the cloud
 const syncStudent = (s) => db.collection('students').doc(s.id).set(s);
 const syncGrade = (id, data) => db.collection('grades').doc(id).set(data);
 const syncGlobal = (val) => db.collection('settings').doc('global').set({ totalClassesHeld: val });
 
 // --- 3. UI HANDLERS ---
 
-window.checkAuth = () => {
+window.checkAuth = async () => {
     const passInput = document.getElementById('admin-pass');
+    // Using 'Nalanda' as per original logic
     if (passInput && passInput.value === "Nalanda") {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('dashboard').classList.remove('hidden');
-        loadFromCloud(); // Pull data from cloud on login
-    } else { alert("Invalid Password"); }
+        startRealtimeSync(); 
+    } else { 
+        alert("Invalid Password"); 
+    }
 };
 
 const refreshAllDataViews = () => {
@@ -66,8 +66,8 @@ const refreshAllDataViews = () => {
     renderGradeSettings();
     renderHomework();
     updateDashboardStats();
-    if(document.getElementById('global-classes-input')) 
-        document.getElementById('global-classes-input').value = totalClassesHeld;
+    const globalInput = document.getElementById('global-classes-input');
+    if(globalInput) globalInput.value = totalClassesHeld;
 };
 
 // --- RENDERERS ---
@@ -115,7 +115,7 @@ window.renderHomework = () => {
                 <span class="text-sm font-bold text-white">${s.name}</span>
                 <div class="flex gap-1 overflow-x-auto max-w-[60%]">
                     ${Array.from({length: g.lessons || 10}).map((_, i) => `
-                        <input type="number" value="${s.homework[i] || 0}" class="hw-percent-input w-10 flex-shrink-0" 
+                        <input type="number" value="${(s.homework && s.homework[i]) || 0}" class="hw-percent-input w-10 flex-shrink-0" 
                         onchange="updateHW('${s.id}', ${i}, this.value)">
                     `).join('')}
                 </div>
@@ -162,7 +162,9 @@ window.renderGradeSettings = () => {
 };
 
 window.updateDashboardStats = () => {
-    document.getElementById('stat-total-students').innerText = students.length;
+    const totalEl = document.getElementById('stat-total-students');
+    if(totalEl) totalEl.innerText = students.length;
+    
     const container = document.getElementById('grade-stats-container');
     if (!container) return;
     const activeGrades = [...new Set(students.map(s => s.grade))];
@@ -178,10 +180,10 @@ window.updateDashboardStats = () => {
 window.markAttendance = (id) => {
     const s = students.find(x => x.id === id);
     if(s) {
-        s.attendance += 1;
+        s.attendance = (s.attendance || 0) + 1;
         syncStudent(s);
-        document.getElementById('session-log').prepend(`[${new Date().toLocaleTimeString()}] ${s.name} present.\n`);
-        refreshAllDataViews();
+        const log = document.getElementById('session-log');
+        if(log) log.prepend(`[${new Date().toLocaleTimeString()}] ${s.name} present.\n`);
     }
 };
 
@@ -198,28 +200,31 @@ window.updateGradeProp = (id, p, v) => {
     if(!gradeConfig[id]) gradeConfig[id] = { name: "", lessons: 10, completed: 0 };
     gradeConfig[id][p] = p === 'name' ? v : parseInt(v); 
     syncGrade(id, gradeConfig[id]);
-    refreshAllDataViews(); 
 };
 
 window.handleCSVImport = (event) => {
     const file = event.target.files[0];
     const reader = new FileReader();
     reader.onload = async (e) => {
-        const rows = e.target.result.split('\n').slice(1);
+        const rows = e.target.result.split('\n').filter(row => row.trim() !== '').slice(1);
         for (let row of rows) {
             const cols = row.split(',');
             if (cols.length >= 6) {
                 const s = {
-                    name: cols[0].trim(), id: cols[1].trim(), grade: cols[2].trim().toLowerCase(),
-                    phone: cols[3].trim(), fatherEmail: cols[4].trim(), motherEmail: cols[5].trim(),
-                    attendance: 0, homework: new Array(30).fill(0)
+                    name: cols[0].trim(), 
+                    id: cols[1].trim(), 
+                    grade: cols[2].trim().toLowerCase(),
+                    phone: cols[3].trim(), 
+                    fatherEmail: cols[4].trim(), 
+                    motherEmail: cols[5].trim(),
+                    attendance: 0, 
+                    homework: new Array(30).fill(0)
                 };
-                students.push(s);
+                // syncStudent handles the creation/update in Firestore
                 await syncStudent(s);
             }
         }
-        refreshAllDataViews();
-        alert("Imported and synced to cloud!");
+        alert("Import complete. Data will sync automatically.");
     };
     reader.readAsText(file);
 };
@@ -230,31 +235,24 @@ window.addNewGrade = () => {
     const name = prompt("Enter Display Name (e.g., Grade 1):");
     if(!name) return;
     const data = { name, lessons: 10, completed: 0 };
-    gradeConfig[id.toLowerCase()] = data;
     syncGrade(id.toLowerCase(), data);
-    refreshAllDataViews();
 };
 
 window.removeGrade = async (id) => { 
     if(confirm("Delete Grade Level?")) { 
         await db.collection('grades').doc(id).delete();
-        delete gradeConfig[id]; 
-        refreshAllDataViews(); 
     } 
 };
 
 window.deleteStudent = async (id) => { 
     if(confirm("Delete student?")) { 
         await db.collection('students').doc(id).delete();
-        students = students.filter(s => s.id !== id); 
-        refreshAllDataViews(); 
     } 
 };
 
 window.updateGlobalClasses = (v) => { 
     totalClassesHeld = parseInt(v) || 1; 
     syncGlobal(totalClassesHeld);
-    renderStudentTable();
 };
 
 window.switchTab = (tab, el) => {
