@@ -19,23 +19,18 @@ let gradeConfig = {};
 let isEditing = false;
 
 // --- 2. REALTIME DATA SYNC ---
-// This ensures that as soon as you log in, the app "listens" to the cloud.
-// Any change made (CSV import, manual add, or edit) updates the UI instantly.
 const startRealtimeSync = () => {
-    // Sync Students
     db.collection('students').onSnapshot(snapshot => {
         students = snapshot.docs.map(doc => doc.data());
         refreshAllDataViews();
-    }, err => console.error("Student Sync Error:", err));
+    }, err => console.error("Sync Error:", err));
 
-    // Sync Grade Settings
     db.collection('grades').onSnapshot(snapshot => {
         gradeConfig = {};
         snapshot.forEach(doc => { gradeConfig[doc.id] = doc.data(); });
         refreshAllDataViews();
     });
 
-    // Sync Global Classes Held
     db.collection('settings').doc('global').onSnapshot(doc => {
         if (doc.exists()) {
             totalClassesHeld = doc.data().totalClassesHeld || 1;
@@ -44,7 +39,6 @@ const startRealtimeSync = () => {
     });
 };
 
-// Database Write Helpers
 const syncStudent = (s) => db.collection('students').doc(s.id).set(s);
 const syncGrade = (id, data) => db.collection('grades').doc(id).set(data);
 const syncGlobal = (val) => db.collection('settings').doc('global').set({ totalClassesHeld: val });
@@ -55,11 +49,8 @@ window.checkAuth = async () => {
     if (passInput && passInput.value === "Nalanda") {
         document.getElementById('login-page').style.display = 'none';
         document.getElementById('dashboard').classList.remove('hidden');
-        // Start listening to the database
         startRealtimeSync(); 
-    } else { 
-        alert("Invalid Password"); 
-    }
+    } else { alert("Invalid Password"); }
 };
 
 window.switchTab = (tab, el) => {
@@ -79,9 +70,8 @@ window.openStudentModal = (studentId = null) => {
         isEditing = true;
         document.getElementById('modal-title').innerHTML = 'EDIT <span class="text-blue-500">STUDENT</span>';
         const s = students.find(x => x.id === studentId);
-        
         document.getElementById('m-id').value = s.id;
-        document.getElementById('m-id').disabled = true; // Protect Unique ID
+        document.getElementById('m-id').disabled = true; 
         document.getElementById('m-name').value = s.name;
         document.getElementById('m-grade').value = s.grade;
         document.getElementById('m-phone').value = s.phone;
@@ -107,7 +97,6 @@ window.saveStudent = async () => {
     if (!id) return alert("Student ID is required!");
 
     const existingStudent = students.find(x => x.id === id);
-    
     const s = {
         id: id,
         name: document.getElementById('m-name').value.trim(),
@@ -115,18 +104,12 @@ window.saveStudent = async () => {
         phone: document.getElementById('m-phone').value.trim(),
         fatherEmail: document.getElementById('m-f-email').value.trim(),
         motherEmail: document.getElementById('m-m-email').value.trim(),
-        // If editing, keep their scores. If new, start at 0.
         attendance: isEditing ? (existingStudent?.attendance || 0) : 0,
         homework: isEditing ? (existingStudent?.homework || new Array(30).fill(0)) : new Array(30).fill(0)
     };
 
-    try {
-        await syncStudent(s);
-        closeStudentModal();
-    } catch (err) {
-        alert("Error saving to database. Check console.");
-        console.error(err);
-    }
+    await syncStudent(s);
+    closeStudentModal();
 };
 
 // --- 5. DATA RENDERING ---
@@ -135,25 +118,20 @@ const refreshAllDataViews = () => {
     renderDatabaseTable();
     renderGradeSettings();
     renderHomework();
+    renderAttendanceTab(); // New: Dedicated attendance view renderer
     updateDashboardStats();
-    
-    const globalInput = document.getElementById('global-classes-input');
-    if (globalInput) globalInput.value = totalClassesHeld;
+    if(document.getElementById('global-classes-input')) 
+        document.getElementById('global-classes-input').value = totalClassesHeld;
 };
 
+// Roster Table (Attendance button removed here)
 window.renderStudentTable = () => {
     const tbody = document.getElementById('student-list-body');
     const search = document.getElementById('roster-search')?.value.toLowerCase() || "";
     if (!tbody) return;
 
-    const filtered = students.filter(s => 
-        s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)
-    );
-
-    tbody.innerHTML = filtered.map(s => {
-        const gId = s.grade.toLowerCase();
-        const g = gradeConfig[gId] || { name: "Grade " + gId.replace(/\D/g,''), completed: 0 };
-        
+    tbody.innerHTML = students.filter(s => s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)).map(s => {
+        const g = gradeConfig[s.grade.toLowerCase()] || { name: "Grade " + s.grade.replace(/\D/g,''), completed: 0 };
         const attPct = totalClassesHeld > 0 ? ((s.attendance / totalClassesHeld) * 100).toFixed(0) : 0;
         const comp = parseInt(g.completed) || 0;
         const hwSum = s.homework ? s.homework.slice(0, comp).reduce((a, b) => a + (parseInt(b) || 0), 0) : 0;
@@ -169,12 +147,33 @@ window.renderStudentTable = () => {
             <td class="p-6 text-center">${attPct}%</td>
             <td class="p-6 text-center font-bold text-emerald-500">${hwPct}%</td>
             <td class="p-6 text-right space-x-2">
-                <button onclick="markAttendance('${s.id}')" class="levitate p-2 hover:text-emerald-400" title="Mark Present">✓</button>
-                <button onclick="openStudentModal('${s.id}')" class="levitate p-2 hover:text-blue-500" title="Edit">✎</button>
-                <button onclick="deleteStudent('${s.id}')" class="levitate p-2 hover:text-red-500" title="Delete">🗑</button>
+                <button onclick="openStudentModal('${s.id}')" class="levitate p-2 hover:text-blue-500">✎</button>
+                <button onclick="deleteStudent('${s.id}')" class="levitate p-2 hover:text-red-500">🗑</button>
             </td>
         </tr>`;
     }).join('');
+};
+
+// Attendance Tab Logic (Assuming you have an element to hold this)
+window.renderAttendanceTab = () => {
+    const container = document.getElementById('attendance-list-container');
+    if (!container) return;
+    
+    // Sort students by grade then name
+    const sorted = [...students].sort((a,b) => a.grade.localeCompare(b.grade) || a.name.localeCompare(b.name));
+    
+    container.innerHTML = sorted.map(s => `
+        <div class="glass-panel p-4 mb-2 rounded-2xl flex justify-between items-center border border-white/5">
+            <div>
+                <div class="text-white font-bold">${s.name}</div>
+                <div class="text-[10px] text-blue-400 font-black uppercase">${gradeConfig[s.grade]?.name || s.grade}</div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-mono text-slate-500">TOTAL: ${s.attendance || 0}</span>
+                <button onclick="markAttendance('${s.id}')" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-500 hover:text-white px-4 py-2 rounded-xl text-xs font-black transition-all">MARK PRESENT</button>
+            </div>
+        </div>
+    `).join('');
 };
 
 window.renderDatabaseTable = () => {
@@ -182,12 +181,10 @@ window.renderDatabaseTable = () => {
     const search = document.getElementById('db-search')?.value.toLowerCase() || "";
     if (!tbody) return;
 
-    tbody.innerHTML = students.filter(s => 
-        s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)
-    ).map(s => `
+    tbody.innerHTML = students.filter(s => s.name.toLowerCase().includes(search) || s.id.toLowerCase().includes(search)).map(s => `
         <tr class="border-b border-white/5 text-sm hover:bg-white/[0.02] transition-colors">
             <td class="p-6 font-bold text-white">${s.name}<br><span class="text-[10px] text-slate-500 font-mono">${s.id}</span></td>
-            <td class="p-6 text-blue-400 font-black">${(gradeConfig[s.grade]?.name || "Grade " + s.grade.replace(/\D/g,''))}</td>
+            <td class="p-6 text-blue-400 font-black">${(gradeConfig[s.grade]?.name || s.grade)}</td>
             <td class="p-6">${s.phone}</td>
             <td class="p-6 text-slate-400">${s.fatherEmail}</td>
             <td class="p-6 text-slate-400">${s.motherEmail}</td>
@@ -202,25 +199,19 @@ window.renderHomework = () => {
     const container = document.getElementById('hw-grade-container');
     if (!container) return;
     const activeGrades = [...new Set(students.map(s => s.grade))];
-    
     container.innerHTML = activeGrades.map(gId => {
         const list = students.filter(s => s.grade === gId);
-        const g = gradeConfig[gId] || { name: "Grade " + gId.replace(/\D/g,''), lessons: 10 };
+        const g = gradeConfig[gId] || { name: "Grade " + gId, lessons: 10 };
         const rows = list.map(s => `
             <div class="p-4 flex justify-between items-center border-b border-white/5">
                 <span class="text-sm font-bold text-white">${s.name}</span>
                 <div class="flex gap-1 overflow-x-auto max-w-[60%]">
                     ${Array.from({length: g.lessons || 10}).map((_, i) => `
-                        <input type="number" value="${(s.homework && s.homework[i]) || 0}" 
-                        class="hw-percent-input w-10 flex-shrink-0" 
-                        onchange="updateHW('${s.id}', ${i}, this.value)">
+                        <input type="number" value="${s.homework?.[i] || 0}" class="hw-percent-input w-10 flex-shrink-0" onchange="updateHW('${s.id}', ${i}, this.value)">
                     `).join('')}
                 </div>
             </div>`).join('');
-        return `<div class="glass-panel rounded-3xl overflow-hidden mb-4">
-                  <div class="p-4 bg-white/5 font-black uppercase text-[10px] text-blue-400">${g.name}</div>
-                  ${rows}
-                </div>`;
+        return `<div class="glass-panel rounded-3xl overflow-hidden mb-4"><div class="p-4 bg-white/5 font-black uppercase text-[10px] text-blue-400">${g.name}</div>${rows}</div>`;
     }).join('');
 };
 
@@ -229,35 +220,17 @@ window.renderGradeSettings = () => {
     if (!list) return;
     list.innerHTML = Object.keys(gradeConfig).map(id => `
         <div class="p-5 bg-black/40 rounded-2xl border border-white/5 space-y-4">
-            <div class="flex justify-between items-center">
-                <span class="font-bold text-white font-mono uppercase text-xs">${id}</span>
-                <button onclick="removeGrade('${id}')" class="text-red-500 text-[10px] font-black">DELETE</button>
-            </div>
+            <div class="flex justify-between items-center"><span class="font-bold text-white font-mono uppercase text-xs">${id}</span><button onclick="removeGrade('${id}')" class="text-red-500 text-[10px] font-black">DELETE</button></div>
             <input type="text" value="${gradeConfig[id].name}" onchange="updateGradeProp('${id}','name',this.value)" class="w-full bg-white/5 p-2 rounded text-white text-sm outline-none">
             <div class="grid grid-cols-2 gap-4">
-                <div><label class="text-[8px] font-black text-slate-500">LESSONS</label>
-                <input type="number" value="${gradeConfig[id].lessons}" onchange="updateGradeProp('${id}','lessons',this.value)" class="w-full bg-white/5 p-2 rounded text-blue-400 text-xs text-center"></div>
-                <div><label class="text-[8px] font-black text-emerald-500">COMPLETED</label>
-                <input type="number" value="${gradeConfig[id].completed}" onchange="updateGradeProp('${id}','completed',this.value)" class="w-full bg-white/5 p-2 rounded text-emerald-400 text-xs text-center"></div>
+                <div><label class="text-[8px] font-black text-slate-500 uppercase">Lessons</label><input type="number" value="${gradeConfig[id].lessons}" onchange="updateGradeProp('${id}','lessons',this.value)" class="w-full bg-white/5 p-2 rounded text-blue-400 text-xs text-center"></div>
+                <div><label class="text-[8px] font-black text-emerald-500 uppercase">Completed</label><input type="number" value="${gradeConfig[id].completed}" onchange="updateGradeProp('${id}','completed',this.value)" class="w-full bg-white/5 p-2 rounded text-emerald-400 text-xs text-center"></div>
             </div>
         </div>`).join('');
 };
 
 window.updateDashboardStats = () => {
-    const totalEl = document.getElementById('stat-total-students');
-    if(totalEl) totalEl.innerText = students.length;
-    
-    const container = document.getElementById('grade-stats-container');
-    if (!container) return;
-    const activeGrades = [...new Set(students.map(s => s.grade))];
-    container.innerHTML = activeGrades.map(gId => {
-        const count = students.filter(s => s.grade === gId).length;
-        const name = gradeConfig[gId]?.name || "Grade " + gId.replace(/\D/g,'');
-        return `<div class="glass-panel p-6 rounded-3xl border border-white/5 min-w-[160px]">
-                  <p class="text-[9px] font-black text-blue-500 uppercase mb-1">${name}</p>
-                  <h2 class="text-2xl font-black text-white">${count}</h2>
-                </div>`;
-    }).join('');
+    if(document.getElementById('stat-total-students')) document.getElementById('stat-total-students').innerText = students.length;
 };
 
 // --- 6. ACTIONS ---
@@ -266,8 +239,7 @@ window.markAttendance = async (id) => {
     if(s) {
         s.attendance = (s.attendance || 0) + 1;
         await syncStudent(s);
-        const log = document.getElementById('session-log');
-        if(log) log.prepend(`[${new Date().toLocaleTimeString()}] ${s.name} present.\n`);
+        if(document.getElementById('session-log')) document.getElementById('session-log').prepend(`[${new Date().toLocaleTimeString()}] ${s.name} present.\n`);
     }
 };
 
@@ -289,56 +261,27 @@ window.updateGradeProp = async (id, p, v) => {
 window.handleCSVImport = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = async (e) => {
-        const text = e.target.result;
-        // Split rows and filter out empty lines
-        const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
-        
-        // Skip header (row 0)
-        for (let i = 1; i < rows.length; i++) {
-            const cols = rows[i].split(',').map(c => c.trim());
+        const rows = e.target.result.split('\n').map(r => r.trim()).filter(r => r.length > 0).slice(1);
+        for (let row of rows) {
+            const cols = row.split(',').map(c => c.trim());
             if (cols.length >= 6) {
-                const s = {
-                    name: cols[0], 
-                    id: cols[1], 
-                    grade: cols[2].toLowerCase(),
-                    phone: cols[3], 
-                    fatherEmail: cols[4], 
-                    motherEmail: cols[5],
-                    attendance: 0, 
-                    homework: new Array(30).fill(0)
-                };
-                await syncStudent(s);
+                await syncStudent({
+                    name: cols[0], id: cols[1], grade: cols[2].toLowerCase(),
+                    phone: cols[3], fatherEmail: cols[4], motherEmail: cols[5],
+                    attendance: 0, homework: new Array(30).fill(0)
+                });
             }
         }
-        alert("Import complete! Data is syncing with cloud.");
-        event.target.value = ''; // Reset input
+        alert("Import complete!");
+        event.target.value = '';
     };
     reader.readAsText(file);
 };
 
-window.addNewGrade = () => {
-    const id = prompt("Enter Grade ID (e.g., g1):");
-    if(!id) return;
-    const name = prompt("Enter Display Name (e.g., Grade 1):");
-    if(!name) return;
-    syncGrade(id.toLowerCase(), { name, lessons: 10, completed: 0 });
-};
-
-window.removeGrade = async (id) => { 
-    if(confirm("Delete Grade Level? This won't delete students, but will hide their progress stats.")) { 
-        await db.collection('grades').doc(id).delete();
-    } 
-};
-
 window.deleteStudent = async (id) => { 
-    if(confirm("Are you sure you want to delete this student permanently?")) { 
-        await db.collection('students').doc(id).delete();
-    } 
+    if(confirm("Permanently delete student?")) await db.collection('students').doc(id).delete();
 };
 
-window.updateGlobalClasses = (v) => { 
-    syncGlobal(parseInt(v) || 1);
-};
+window.updateGlobalClasses = (v) => syncGlobal(parseInt(v) || 1);
